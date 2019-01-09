@@ -1,0 +1,11 @@
+
+
+base = ../faces/
+port = 5000
+marks = 5
+thres = 0.6
+box = 4
+mark = 4
+mmod = 1
+upsize = 800
+jpeg = 0
