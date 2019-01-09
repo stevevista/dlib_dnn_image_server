@@ -3,6 +3,7 @@
 #include "yolo/yolo.h"
 #include "landmark.hpp"
 
+
 // ----------------------------------------------------------------------------------------
 
 // The next bit of code defines a ResNet network.  It's basically copied
@@ -175,7 +176,9 @@ std::vector<face_dectection> model::predict_faces(matrix<rgb_pixel>& img, int ma
   // but vectors from different people will be far apart.  So we can use these vectors to
   // identify if a pair of images are from the same person or from different people.  
   auto start_time = std::chrono::system_clock::now();
+  mtx.lock();
   auto face_descriptors = net(faces);
+  mtx.unlock();
   auto eclipsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - start_time).count();
   cout << "predict " << face_descriptors.size() << "  faces in " << eclipsed << " millisecs" << endl;
 

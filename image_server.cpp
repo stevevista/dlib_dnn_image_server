@@ -30,13 +30,6 @@ protected:
     void on_post_detect(std::ostream& out, const incoming_things&, outgoing_things&);
     void on_post_resize(std::ostream& out, const incoming_things&, outgoing_things&);
 
-    int detect(ostringstream& sout, 
-                const string& basedir,
-                const string& filename,
-                const string& output_name,
-                const matrix<float,0,1>& feature,
-                bool detect_object_only);
-
     int detect_face(ostringstream& sout, 
                 matrix<dlib::rgb_pixel>& img,
                 const string& basedir,
@@ -50,47 +43,6 @@ public:
 image_server::image_server(const string& basedir, int landmarks, bool use_mmod, long upsize, int yolo_type)
 : modeler(basedir, landmarks, use_mmod, upsize, yolo_type) {
         
-}
-
-int image_server::detect(ostringstream& sout, 
-                const string& basedir,
-                const string& filename,
-                const string& output_name,
-                const matrix<float,0,1>& feature,
-                bool detect_object_only) {
-    
-    matrix<rgb_pixel> img;
-    try {
-        load_image(img,  filename);
-    } catch(exception& e) {
-        cout << e.what() << endl;
-        return -1;
-    }
-
-    int counts = 0;
-
-    if (detect_object_only) {
-        counts = modeler.predict_objects(img, .5, .45);
-    } else {
-        counts = detect_face(sout, 
-                img,
-                basedir,
-                feature);
-    }
-
-    if (counts > 0) {
-        try {
-            if (!png) save_jpeg(img, basedir + output_name);
-            else save_png(img, basedir + output_name);
-        } catch(exception& e) {
-            cout << e.what() << endl;
-            return -1;
-        }
-
-        sout << "\"output\":\"" << output_name << "\"";
-    }
-
-    return counts;
 }
 
 int image_server::detect_face(ostringstream& sout, 
@@ -118,13 +70,9 @@ int image_server::detect_face(ostringstream& sout,
 
     for (size_t i = 0; i < dets.size(); ++i) {
         auto sub_path = random_string() + (png ? ".png" : ".jpg");
-        try {
-            if (!png) save_jpeg(dets[i].face, basedir + sub_path);
-            else save_png(dets[i].face, basedir + sub_path);
-        } catch(exception& e) {
-            cout << e.what() << endl;
-            return 0;
-        }
+
+        if (!png) save_jpeg(dets[i].face, basedir + sub_path);
+        else save_png(dets[i].face, basedir + sub_path);
 
         if (box > 0)
             draw_rectangle(img, dets[i].rect, rgb_pixel(0, 255, 0), box);
@@ -160,12 +108,6 @@ const string image_server::on_get_index(const incoming_things& incoming, outgoin
                 << "<input type='submit'> "
                 << " </form>"; 
 
-            sout << "<form action='/detect' method='post' enctype='multipart/form-data'> "
-                << "File: <input name='file' type='file'><br>  "
-                << "Spec: <input name='spec' type='text'><br>  "
-                << "<input type='submit'> "
-                << " </form>"; 
-
             // Write out some of the inputs to this request so that they show up on the
             // resulting web page.
             sout << "<br>  path = "         << incoming.path << endl;
@@ -193,7 +135,6 @@ const string image_server::on_get_index(const incoming_things& incoming, outgoin
 
 }
 
-
 void image_server::on_post_detect(std::ostream& out, const incoming_things& incoming, outgoing_things& outgoing) {
     
     ostringstream sout;
@@ -204,6 +145,9 @@ void image_server::on_post_detect(std::ostream& out, const incoming_things& inco
     if (upload_path.size())
         filepath = upload_path;
 
+    matrix<rgb_pixel> img;
+    load_image(img,  filepath);
+
     auto basedir = get_dirname(filepath);
     auto output_name = random_string() + (png ? ".png" : ".jpg");
     int detects = 0;
@@ -212,35 +156,46 @@ void image_server::on_post_detect(std::ostream& out, const incoming_things& inco
 
     sout << "{";
 
-    if (spec == "detect_face") {
-        detects = detect(sout, basedir, filepath, output_name, matrix<float,0,1>(), false);
-    } else if (spec == "detect_object") {
-        detects = detect(sout, basedir, filepath, output_name, matrix<float,0,1>(), true);
+    if (spec == "detect_object") {
+        detects = modeler.predict_objects(img, .5, .45);
     } else {
         auto bench_data = split_float_array(spec);
         if (bench_data.size() == 128) {
 
-                    matrix<float,0,1> feature;
-                    feature.set_size(128);
-                    for (int i=0; i< feature.size(); i++) {
-                        feature(i) = bench_data[i];
-                    }
-            detects = detect(sout, basedir, filepath, output_name, feature, false);
+            matrix<float,0,1> feature;
+            feature.set_size(128);
+            for (int i=0; i< feature.size(); i++) {
+                feature(i) = bench_data[i];
+            }
+            detects = detect_face(sout, 
+                img,
+                basedir,
+                feature);
         } else {
-            detects = detect(sout, basedir, filepath, output_name, matrix<float,0,1>(), false);
+            detects = detect_face(sout, 
+                img,
+                basedir,
+                matrix<float,0,1>());
+        }
+    }
+
+    if (detects > 0) {
+        if (!png) save_jpeg(img, basedir + output_name);
+        else save_png(img, basedir + output_name);
+
+        sout << "\"output\":\"" << output_name << "\"";
+
+        if (upload_path.size()) {
+            outgoing.headers["Content-Type"] = png ? "image/png" : "image/jpeg";
+            send_file(
+                out,
+                outgoing,
+                basedir + output_name);
+            return;
         }
     }
             
     sout << "}" << endl;
-
-    if (upload_path.size() && detects > 0) {
-        outgoing.headers["Content-Type"] = png ? "image/png" : "image/jpeg";
-        send_file(
-            out,
-            outgoing,
-            basedir + output_name);
-        return;
-    }
 
     write_http_response(out, outgoing, sout.str());
 }
@@ -311,6 +266,22 @@ void image_server::install_routes() {
         on_post_resize(out, incoming, outgoing);
     });
 
+    get("/detect", [&] (std::ostream& out, const incoming_things& incoming, outgoing_things& outgoing, const std::vector<string>&) {
+        ostringstream sout;
+    
+        sout << " <html> <body> "
+                << "<form action='/detect' method='post' enctype='multipart/form-data'> "
+                << "File: <input name='file' type='file'><br>  "
+                << "Spec: <input name='spec' type='text'><br>  "
+                << "<input type='submit'> "
+                << " </form>"; 
+
+        sout << "<br/><br/>";
+        sout << "</body> </html>";
+
+        write_http_response(out, outgoing, sout.str());
+    });
+
     get("/resize", [&] (std::ostream& out, const incoming_things& incoming, outgoing_things& outgoing, const std::vector<string>&) {
         ostringstream sout;
     
@@ -319,14 +290,6 @@ void image_server::install_routes() {
                 << "File: <input name='file' type='file'><br>  "
                 << "<input type='submit'> "
                 << " </form>"; 
-
-        sout << "<br>  request_type = " << incoming.request_type << endl;
-        sout << "<br>  content_type = " << incoming.content_type << endl;
-        sout << "<br>  protocol = "     << incoming.protocol << endl;
-        sout << "<br>  foreign_ip = "   << incoming.foreign_ip << endl;
-        sout << "<br>  foreign_port = " << incoming.foreign_port << endl;
-        sout << "<br>  local_ip = "     << incoming.local_ip << endl;
-        sout << "<br>  local_port = "   << incoming.local_port << endl;
 
         sout << "<br/><br/>";
         sout << "</body> </html>";
@@ -365,7 +328,7 @@ int main(int argc, const char* argv[])
         image_server our_web_server(runtime_dir, face_marks, mmod, upsize, yolo);
         our_web_server.install_routes();
 
-        our_web_server.set_max_connections(1);
+        // our_web_server.set_max_connections(1);
 
         // make it listen on port 5000
         our_web_server.set_listening_port(port);

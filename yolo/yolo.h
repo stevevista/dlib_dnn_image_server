@@ -5,6 +5,7 @@
 #include <dlib/cuda/tensor_tools.h>
 #include <dlib/image_io.h>
 #include <dlib/image_transforms.h>
+#include <mutex>
 
 namespace darknet {
 
@@ -87,13 +88,17 @@ struct network {
             }
         }
 
+        mtx.lock();
         predict(input);
-        return get_boxes(src_img.nc(), src_img.nr(), thresh);
+        auto out = get_boxes(src_img.nc(), src_img.nr(), thresh);
+        mtx.unlock();
+        return out;
     }
 
     int h, w;
     std::vector<LayerPtr> layers;
     resizable_tensor input;
+    std::mutex mtx;
 } ;
 
 

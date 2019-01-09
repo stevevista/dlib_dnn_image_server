@@ -1,6 +1,7 @@
 #pragma once
 #include <dlib/dnn.h>
 #include <dlib/image_processing/full_object_detection.h>
+#include <mutex>
 
 using namespace dlib;
 using namespace std;
@@ -18,6 +19,7 @@ class model {
     const bool use_mmod;
     const long pyramid_upsize;
     const int yolo_type;
+    std::mutex mtx;
 public:
     model(const string& basedir, int landmarks, bool use_mmod, long upsize, int yolo_type);
 
