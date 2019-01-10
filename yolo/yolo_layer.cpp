@@ -23,9 +23,7 @@ const tensor& YoloLayer::forward_layer(const tensor& input)
     float *X = const_cast<float*>(input.host());
     tensor& out = const_cast<tensor&>(input);
 
-    const int width = out_w;
-    const int height = out_h;
-    const int spatical = width * height;
+    const int spatical = out_h * out_w;
 
     for(int n = 0; n < num; ++n) {
         auto dest = xy(out, n*(4+classes+1)*spatical);

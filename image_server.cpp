@@ -26,7 +26,6 @@ class image_server : public web_server {
     model modeler;
 
 protected:
-    const string on_get_index(const incoming_things&, outgoing_things&);
     void on_post_detect(std::ostream& out, const incoming_things&, outgoing_things&);
     void on_post_resize(std::ostream& out, const incoming_things&, outgoing_things&);
 
@@ -92,47 +91,6 @@ int image_server::detect_face(ostringstream& sout,
     sout << "],";
 
     return dets.size();
-}
-
-const string image_server::on_get_index(const incoming_things& incoming, outgoing_things& outgoing) {
-    
-    ostringstream sout;
-    
-    // We are going to send back a page that contains an HTML form with two text input fields.
-            // One field called name.  The HTML form uses the post method but could also use the get
-            // method (just change method='post' to method='get').
-            sout << " <html> <body> "
-                << "<form action='/detect' method='post'> "
-                << "File: <input name='filepath' type='text'><br>  "
-                << "Spec: <input name='spec' type='text'><br>  "
-                << "<input type='submit'> "
-                << " </form>"; 
-
-            // Write out some of the inputs to this request so that they show up on the
-            // resulting web page.
-            sout << "<br>  path = "         << incoming.path << endl;
-            sout << "<br>  request_type = " << incoming.request_type << endl;
-            sout << "<br>  content_type = " << incoming.content_type << endl;
-            sout << "<br>  protocol = "     << incoming.protocol << endl;
-            sout << "<br>  foreign_ip = "   << incoming.foreign_ip << endl;
-            sout << "<br>  foreign_port = " << incoming.foreign_port << endl;
-            sout << "<br>  local_ip = "     << incoming.local_ip << endl;
-            sout << "<br>  local_port = "   << incoming.local_port << endl;
-
-
-            sout << "<br/><br/>";
-
-            sout << "<h2>HTTP Headers the web browser sent to the server</h2>";
-            // Echo out all the HTTP headers we received from the client web browser
-            for ( key_value_map_ci::const_iterator ci = incoming.headers.begin(); ci != incoming.headers.end(); ++ci )
-            {
-                sout << "<br/>" << ci->first << ": " << ci->second << endl;
-            }
-
-    sout << "</body> </html>";
-
-    return sout.str();
-
 }
 
 void image_server::on_post_detect(std::ostream& out, const incoming_things& incoming, outgoing_things& outgoing) {
@@ -254,8 +212,42 @@ void image_server::on_post_resize(std::ostream& out, const incoming_things& inco
 
 void image_server::install_routes() {
     get("/", [&] (std::ostream& out, const incoming_things& incoming, outgoing_things& outgoing, const std::vector<string>&) {
-        auto result = on_get_index(incoming, outgoing);
-        write_http_response(out, outgoing, result);
+        ostringstream sout;
+    
+        // We are going to send back a page that contains an HTML form with two text input fields.
+            // One field called name.  The HTML form uses the post method but could also use the get
+            // method (just change method='post' to method='get').
+            sout << " <html> <body> "
+                << "<form action='/detect' method='post'> "
+                << "File: <input name='filepath' type='text'><br>  "
+                << "Spec: <input name='spec' type='text'><br>  "
+                << "<input type='submit'> "
+                << " </form>"; 
+
+            // Write out some of the inputs to this request so that they show up on the
+            // resulting web page.
+            sout << "<br>  path = "         << incoming.path << endl;
+            sout << "<br>  request_type = " << incoming.request_type << endl;
+            sout << "<br>  content_type = " << incoming.content_type << endl;
+            sout << "<br>  protocol = "     << incoming.protocol << endl;
+            sout << "<br>  foreign_ip = "   << incoming.foreign_ip << endl;
+            sout << "<br>  foreign_port = " << incoming.foreign_port << endl;
+            sout << "<br>  local_ip = "     << incoming.local_ip << endl;
+            sout << "<br>  local_port = "   << incoming.local_port << endl;
+
+
+            sout << "<br/><br/>";
+
+            sout << "<h2>HTTP Headers the web browser sent to the server</h2>";
+            // Echo out all the HTTP headers we received from the client web browser
+            for ( key_value_map_ci::const_iterator ci = incoming.headers.begin(); ci != incoming.headers.end(); ++ci )
+            {
+                sout << "<br/>" << ci->first << ": " << ci->second << endl;
+            }
+
+        sout << "</body> </html>";
+
+        write_http_response(out, outgoing, sout.str());
     });
 
     post("/detect", [&] (std::ostream& out, const incoming_things& incoming, outgoing_things& outgoing, const std::vector<string>&) {

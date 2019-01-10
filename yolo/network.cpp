@@ -126,7 +126,7 @@ void repeatConvolutionalLayers(network* net, int filters, int repeats) {
     }
 }
 
-NetworkPtr YoloSPPNet()
+NetworkPtr YoloSPPNet(const std::string& data_dir)
 {
     auto net = std::make_shared<network>();
 
@@ -169,11 +169,11 @@ NetworkPtr YoloSPPNet()
     repeatConvolutionalLayers(net.get(), 128, 3);
     makeYoloLayers(net.get(), 500, std::vector<float>{10,13,  16,30,  33,23});
 
-    load_alphabets();
+    load_alphabets(data_dir);
     return net;
 }
 
-NetworkPtr YoloNet()
+NetworkPtr YoloNet(const std::string& data_dir)
 {
     auto net = std::make_shared<network>();
 
@@ -204,11 +204,11 @@ NetworkPtr YoloNet()
     repeatConvolutionalLayers(net.get(), 128, 3);
     makeYoloLayers(net.get(), 80, std::vector<float>{10,13,  16,30,  33,23});
     
-    load_alphabets();
+    load_alphabets(data_dir);
     return net;
 }
 
-NetworkPtr TinyYoloNet() {
+NetworkPtr TinyYoloNet(const std::string& data_dir) {
     auto net = std::make_shared<network>();
 
     net->w  = 416; 
@@ -234,19 +234,19 @@ NetworkPtr TinyYoloNet() {
     net->layers.push_back(std::make_shared<ConvolutionalLayer>(net->back()->out_c, net->back()->out_h, net->back()->out_w, 256, 3));
     makeYoloLayers(net.get(), 80, std::vector<float>{10,14,  23,27,  37,58});
 
-    load_alphabets();
+    load_alphabets(data_dir);
     return net;
 }
 
-NetworkPtr loadYoloNet(const std::string& filename) {
+NetworkPtr loadYoloNet(const std::string& data_dir, const std::string& filename) {
 
     NetworkPtr net;
     if (filename.find("tiny.weights") != std::string::npos) {
-        net = TinyYoloNet();
+        net = TinyYoloNet(data_dir);
     } else if (filename.find("spp_final.weights") != std::string::npos) {
-        net = YoloSPPNet();
+        net = YoloSPPNet(data_dir);
     } else {
-        net = YoloNet();
+        net = YoloNet(data_dir);
     }
 
     net->load_weights(filename.c_str());
@@ -299,7 +299,7 @@ void network::predict(const tensor& x)
     }
 }
 
-std::vector<detection> network::get_boxes(int w, int h, float thresh)
+std::vector<detection> network::predict_boxes(int w, int h, float thresh)
 {
     const int netw = this->w;
     const int neth = this->h;
@@ -317,9 +317,14 @@ std::vector<detection> network::get_boxes(int w, int h, float thresh)
     }
 
     std::vector<detection> dets;
+
+    mtx.lock();
+    predict(input);
+
     for(auto l : layers) {
         l->get_yolo_detections(thresh, dets);
     }
+    mtx.unlock();
 
     for (auto& det : dets) {
         // correct box

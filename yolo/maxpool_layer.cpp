@@ -22,26 +22,25 @@ const tensor& MaxPoolLayer::forward_layer(const tensor& input)
         mp(output, input);
         return output;
     } else {
-        int i,j,k,m,n;
         int w_offset = -(window_size -1)/2;
         int h_offset = -(window_size -1)/2;
 
-        int h = this->out_h;
-        int w = this->out_w;
+        const int h = this->out_h;
+        const int w = this->out_w;
         const int input_w = input.nc();
         const int input_h = input.nr();
-        int c = input.k();
+        const int c = input.k();
         auto input_ptr = input.host();
         auto output_ptr = output.host();
 
-        for(k = 0; k < c; ++k){
-            for(i = 0; i < h; ++i){
-                for(j = 0; j < w; ++j){
+        for(int k = 0; k < c; ++k){
+            for(int i = 0; i < h; ++i){
+                for(int j = 0; j < w; ++j){
                     int out_index = j + w*(i + h*(k));
                     float max = -FLT_MAX;
                     int max_i = -1;
-                    for(n = 0; n < window_size; ++n){
-                        for(m = 0; m < window_size; ++m){
+                    for(int n = 0; n < window_size; ++n){
+                        for(int m = 0; m < window_size; ++m){
                             int cur_h = h_offset + i*this->stride + n;
                             int cur_w = w_offset + j*this->stride + m;
                             int index = cur_w + input_w*(cur_h + input_h*(k));

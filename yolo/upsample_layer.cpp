@@ -2,7 +2,7 @@
 
 namespace darknet {
 
-UpSampleLayer::UpSampleLayer(int c, int w, int h, int _stride)
+UpSampleLayer::UpSampleLayer(int c, int h, int w, int _stride)
 : stride(_stride)
 {
     this->out_w = w*stride;

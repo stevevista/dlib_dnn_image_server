@@ -91,8 +91,6 @@ model::model(const string& _basedir, int landmarks, bool _use_mmod, long upsize,
 , pyramid_upsize(upsize)
 , yolo_type(_yolo_type)
 {
-  darknet::runtime_dir = basedir;
-
   detector = get_frontal_face_detector();
 
   deserialize(face_landmarks == 68 ? basedir + "shape_predictor_68_face_landmarks.dat" : basedir + "shape_predictor_5_face_landmarks.dat") >> sp;
@@ -101,8 +99,8 @@ model::model(const string& _basedir, int landmarks, bool _use_mmod, long upsize,
 
   if (use_mmod) deserialize(basedir + "mmod_human_face_detector.dat") >> mmod_net;
 
-  if (yolo_type == 1) yolonet = darknet::loadYoloNet(basedir + "yolov3-tiny.weights");
-  else if (yolo_type == 2) yolonet = darknet::loadYoloNet(basedir + "yolov3.weights");
+  if (yolo_type == 1) yolonet = darknet::loadYoloNet(basedir, basedir + "yolov3-tiny.weights");
+  else if (yolo_type == 2) yolonet = darknet::loadYoloNet(basedir, basedir + "yolov3.weights");
 }
 
 std::vector<rectangle> model::detect_faces(matrix<rgb_pixel>& img) {

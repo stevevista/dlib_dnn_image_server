@@ -17,16 +17,16 @@ struct  layer;
 typedef std::shared_ptr<layer> LayerPtr; 
 typedef std::shared_ptr<network> NetworkPtr; 
 
-typedef struct{
+struct box {
     float x, y, w, h;
-} box;
+};
 
-typedef struct detection {
+struct detection {
     box bbox;
     std::vector<float> prob;
     float objectness;
     int sort_class;
-} detection;
+};
 
 struct layer {
     virtual ~layer() {}
@@ -41,10 +41,10 @@ struct layer {
 struct network {
 
     LayerPtr back();
-    std::vector<detection> get_boxes(int w, int h, float thresh);
-
+    
     void load_weights(const char *filename);
     void predict(const tensor& x);
+    std::vector<detection> predict_boxes(int w, int h, float thresh);
 
     template<typename image_type>
     std::vector<detection> predict_yolo(const image_type& src_img, float thresh) {
@@ -88,11 +88,7 @@ struct network {
             }
         }
 
-        mtx.lock();
-        predict(input);
-        auto out = get_boxes(src_img.nc(), src_img.nr(), thresh);
-        mtx.unlock();
-        return out;
+        return predict_boxes(src_img.nc(), src_img.nr(), thresh);
     }
 
     int h, w;
@@ -102,16 +98,15 @@ struct network {
 } ;
 
 
-NetworkPtr YoloNet();
-NetworkPtr TinyYoloNet();
-NetworkPtr YoloSPPNet();
-NetworkPtr loadYoloNet(const std::string& filename);
+NetworkPtr YoloNet(const std::string& data_dir);
+NetworkPtr TinyYoloNet(const std::string& data_dir);
+NetworkPtr YoloSPPNet(const std::string& data_dir);
+NetworkPtr loadYoloNet(const std::string& data_dir, const std::string& filename);
 
 int draw_detections(matrix<dlib::rgb_pixel>& im, const std::vector<detection>& dets, float thresh, const std::vector<std::string>& names);
 int draw_detections(matrix<dlib::rgb_pixel>& im, const std::vector<detection>& dets, float thresh);
 
-extern std::string runtime_dir;
-void load_alphabets();
+void load_alphabets(const std::string& data_dir);
 
 void do_nms_obj(std::vector<detection>& dets, float thresh);
 void do_nms_sort(std::vector<detection>& dets, float thresh);

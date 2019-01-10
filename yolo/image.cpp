@@ -15,12 +15,10 @@ static unsigned char get_color(int c, int x, int max)
     return r * 255;
 }
 
-std::string runtime_dir = "";
-
 ////////
 std::vector<matrix<dlib::rgb_pixel>> alphabets(128);
 
-void load_alphabets()
+void load_alphabets(const std::string& data_dir)
 {
     static int inited = 0;
     if (inited) return;
@@ -31,7 +29,7 @@ void load_alphabets()
         char buff[256];
         sprintf(buff, "data/labels/%d_3.png", i);
         matrix<dlib::rgb_pixel> img;
-        load_image(img,  runtime_dir + buff);
+        load_image(img,  data_dir + buff);
         alphabets[i] = img;
     }
 }
@@ -106,9 +104,9 @@ template <
         typename image_type,
         typename pixel_type
         >
-void draw_labled_rectangle(image_type& img, const rectangle& rect, const char *string, const pixel_type& val, unsigned int thickness) {
+void draw_labled_rectangle(image_type& img, const rectangle& rect, const std::string& string, const pixel_type& val, unsigned int thickness) {
     draw_rectangle(img, rect, val, thickness);
-    draw_label(img, rect.top() + thickness, rect.left(), string, val);
+    draw_label(img, rect.top() + thickness, rect.left(), string.c_str(), val);
 }
 
 int draw_detections(matrix<dlib::rgb_pixel>& im, const std::vector<detection>& dets, float thresh, const std::vector<std::string>& names)
@@ -117,24 +115,24 @@ int draw_detections(matrix<dlib::rgb_pixel>& im, const std::vector<detection>& d
     const int classes = dets.size() ? dets[0].prob.size() : 0;
 
     for(auto& det : dets) {
-        char labelstr[4096] = {0};
+        std::string labelstr;
         int _class = -1;
         for(int j = 0; j < classes; ++j){
             std::string label = j < names.size() ? names[j] : std::to_string(j);
             if (det.prob[j] > thresh){
                 if (_class < 0) {
-                    strcat(labelstr, label.c_str());
+                    labelstr = label;
                     _class = j;
                 } else {
-                    strcat(labelstr, ", ");
-                    strcat(labelstr, label.c_str());
+                    labelstr += ", ";
+                    labelstr += label;
                 }
                 printf("%s: %.0f%%\n", label.c_str(), det.prob[j]*100);
                 detected_count++;
             }
         }
         if(_class >= 0) {
-            int width = im.nr() * .006;
+            int thickness = im.nr() * .006;
 
             //printf("%d %s: %.0f%%\n", i, names[class], prob*100);
             rgb_pixel clr;
@@ -142,9 +140,8 @@ int draw_detections(matrix<dlib::rgb_pixel>& im, const std::vector<detection>& d
             clr.red = get_color(2,offset,classes);
             clr.green = get_color(1,offset,classes);
             clr.blue = get_color(0,offset,classes);
-            box b = det.bbox;
-            //printf("%f %f %f %f\n", b.x, b.y, b.w, b.h);
 
+            box b = det.bbox;
             int left  = (b.x-b.w/2.)*im.nc();
             int right = (b.x+b.w/2.)*im.nc();
             int top   = (b.y-b.h/2.)*im.nr();
@@ -155,7 +152,7 @@ int draw_detections(matrix<dlib::rgb_pixel>& im, const std::vector<detection>& d
             if(top < 0) top = 0;
             if(bot > im.nr()-1) bot = im.nr()-1;
 
-            draw_labled_rectangle(im, rectangle(left, top, right, bot), labelstr, clr, width);
+            draw_labled_rectangle(im, rectangle(left, top, right, bot), labelstr, clr, thickness);
         }
     }
 

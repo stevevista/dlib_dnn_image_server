@@ -23,9 +23,7 @@ void do_nms_obj(std::vector<detection>& dets, float thresh)
     k = total-1;
     for(i = 0; i <= k; ++i) {
         if(dets[i].objectness == 0) {
-            detection swap = dets[i];
-            dets[i] = dets[k];
-            dets[k] = swap;
+            std::swap(dets[i], dets[k]);
             --k;
             --i;
         }
@@ -36,7 +34,7 @@ void do_nms_obj(std::vector<detection>& dets, float thresh)
         dets[i].sort_class = -1;
     }
 
-    std::sort(dets.begin(), dets.end(), nms_comparator);
+    std::sort(dets.begin(), dets.begin() + total, nms_comparator);
     for(i = 0; i < total; ++i){
         if(dets[i].objectness == 0) continue;
         box a = dets[i].bbox;
@@ -63,9 +61,7 @@ void do_nms_sort(std::vector<detection>& dets, float thresh)
     k = total-1;
     for(i = 0; i <= k; ++i){
         if(dets[i].objectness == 0){
-            detection swap = dets[i];
-            dets[i] = dets[k];
-            dets[k] = swap;
+            std::swap(dets[i], dets[k]);
             --k;
             --i;
         }
@@ -77,7 +73,7 @@ void do_nms_sort(std::vector<detection>& dets, float thresh)
             dets[i].sort_class = k;
         }
 
-        std::sort(dets.begin(), dets.end(), nms_comparator);
+        std::sort(dets.begin(), dets.begin() + total, nms_comparator);
         for(i = 0; i < total; ++i){
             if(dets[i].prob[k] == 0) continue;
             box a = dets[i].bbox;
