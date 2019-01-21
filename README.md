@@ -10,6 +10,8 @@
 - http://dlib.net/files/dlib_face_recognition_resnet_model_v1.dat.bz2
 
 ## Build
+clone or dowload dlib sources
+copy dlib_dnn_image_server to dlib directory
 - cd dlib/dlib_dnn_image_server
 - mkdir build & cd build
 - cmake .. & make
