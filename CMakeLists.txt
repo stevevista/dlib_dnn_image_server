@@ -21,7 +21,6 @@ add_executable(image_server image_server.cpp
          yolo/network.cpp
          yolo/route_layer.cpp
          yolo/upsample_layer.cpp
-         yolo/box.cpp
          yolo/shortcut_layer.cpp 
          yolo/yolo_layer.cpp)
 target_link_libraries(image_server dlib::dlib )

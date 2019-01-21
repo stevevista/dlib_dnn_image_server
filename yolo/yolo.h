@@ -25,7 +25,6 @@ struct detection {
     box bbox;
     std::vector<float> prob;
     float objectness;
-    int sort_class;
 };
 
 struct layer {
@@ -44,10 +43,10 @@ struct network {
     
     void load_weights(const char *filename);
     void predict(const tensor& x);
-    std::vector<detection> predict_boxes(int w, int h, float thresh);
+    std::vector<detection> predict_boxes(int w, int h, float thresh, float nms);
 
     template<typename image_type>
-    std::vector<detection> predict_yolo(const image_type& src_img, float thresh) {
+    std::vector<detection> predict_yolo(const image_type& src_img, float thresh, float nms) {
         auto img = src_img;
         double scale;
         if (((double)this->w/img.nc()) < ((double)this->h/img.nr())) {
@@ -88,7 +87,7 @@ struct network {
             }
         }
 
-        return predict_boxes(src_img.nc(), src_img.nr(), thresh);
+        return predict_boxes(src_img.nc(), src_img.nr(), thresh, nms);
     }
 
     int h, w;
@@ -103,13 +102,11 @@ NetworkPtr TinyYoloNet(const std::string& data_dir);
 NetworkPtr YoloSPPNet(const std::string& data_dir);
 NetworkPtr loadYoloNet(const std::string& data_dir, const std::string& filename);
 
-int draw_detections(matrix<dlib::rgb_pixel>& im, const std::vector<detection>& dets, float thresh, const std::vector<std::string>& names);
-int draw_detections(matrix<dlib::rgb_pixel>& im, const std::vector<detection>& dets, float thresh);
+int draw_detections(matrix<dlib::rgb_pixel>& im, const std::vector<detection>& dets, const std::vector<std::string>& names);
+int draw_detections(matrix<dlib::rgb_pixel>& im, const std::vector<detection>& dets);
 
 void load_alphabets(const std::string& data_dir);
 
-void do_nms_obj(std::vector<detection>& dets, float thresh);
-void do_nms_sort(std::vector<detection>& dets, float thresh);
 
 }
 

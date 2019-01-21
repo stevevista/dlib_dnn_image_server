@@ -109,7 +109,7 @@ void draw_labled_rectangle(image_type& img, const rectangle& rect, const std::st
     draw_label(img, rect.top() + thickness, rect.left(), string.c_str(), val);
 }
 
-int draw_detections(matrix<dlib::rgb_pixel>& im, const std::vector<detection>& dets, float thresh, const std::vector<std::string>& names)
+int draw_detections(matrix<dlib::rgb_pixel>& im, const std::vector<detection>& dets, const std::vector<std::string>& names)
 {
     int detected_count = 0;
     const int classes = dets.size() ? dets[0].prob.size() : 0;
@@ -119,7 +119,7 @@ int draw_detections(matrix<dlib::rgb_pixel>& im, const std::vector<detection>& d
         int _class = -1;
         for(int j = 0; j < classes; ++j){
             std::string label = j < names.size() ? names[j] : std::to_string(j);
-            if (det.prob[j] > thresh){
+            if (det.prob[j]) {
                 if (_class < 0) {
                     labelstr = label;
                     _class = j;
@@ -128,10 +128,10 @@ int draw_detections(matrix<dlib::rgb_pixel>& im, const std::vector<detection>& d
                     labelstr += label;
                 }
                 printf("%s: %.0f%%\n", label.c_str(), det.prob[j]*100);
-                detected_count++;
             }
         }
         if(_class >= 0) {
+            detected_count++;
             int thickness = im.nr() * .006;
 
             //printf("%d %s: %.0f%%\n", i, names[class], prob*100);

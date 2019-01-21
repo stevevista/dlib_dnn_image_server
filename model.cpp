@@ -143,13 +143,11 @@ int model::predict_objects(matrix<rgb_pixel>& img, float thresh, float nms) {
   }
   
   auto start_time = std::chrono::system_clock::now();
-  auto dets = yolonet->predict_yolo(img, thresh);
+  auto dets = yolonet->predict_yolo(img, thresh, nms);
   auto eclipsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - start_time).count();
   cout << "Predicted in " << eclipsed << " millisecs" << endl;
 
-  if (nms) do_nms_sort(dets, nms);
-
-  return draw_detections(img, dets, thresh);
+  return draw_detections(img, dets);
 }
 
 std::vector<face_dectection> model::predict_faces(matrix<rgb_pixel>& img, int mark_thickness, rgb_pixel mark_color) {

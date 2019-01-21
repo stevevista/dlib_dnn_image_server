@@ -299,7 +299,9 @@ void network::predict(const tensor& x)
     }
 }
 
-std::vector<detection> network::predict_boxes(int w, int h, float thresh)
+void do_nms_sort(std::vector<detection>& dets, float thresh);
+
+std::vector<detection> network::predict_boxes(int w, int h, float thresh, float nms)
 {
     const int netw = this->w;
     const int neth = this->h;
@@ -333,11 +335,68 @@ std::vector<detection> network::predict_boxes(int w, int h, float thresh)
         det.bbox.w /= new_w;
         det.bbox.h /= new_h;
     }
+
+    do_nms_sort(dets, nms);
     return dets;
 }
 
-int draw_detections(matrix<dlib::rgb_pixel>& im, const std::vector<detection>& dets, float thresh) {
-    return draw_detections(im, dets, thresh, coco_names);
+static float box_iou(box a, box b);
+
+
+void do_nms_sort(std::vector<detection>& dets, float thresh)
+{
+    const int total = dets.size();
+    const int classes = total ? dets[0].prob.size() : 0;
+
+    for(int k = 0; k < classes; ++k) {
+        std::sort(dets.begin(), dets.end(), [=](const detection& a, const detection& b) { return a.prob[k] > b.prob[k]; });
+        for(int i = 0; i < total; ++i){
+            if(dets[i].prob[k] == 0) continue;
+            box a = dets[i].bbox;
+            for(int j = i+1; j < total; ++j) {
+                box b = dets[j].bbox;
+                if (box_iou(a, b) > thresh){
+                    dets[j].prob[k] = 0;
+                }
+            }
+        }
+    }
+}
+
+static float overlap(float x1, float w1, float x2, float w2)
+{
+    float l1 = x1 - w1/2;
+    float l2 = x2 - w2/2;
+    float left = l1 > l2 ? l1 : l2;
+    float r1 = x1 + w1/2;
+    float r2 = x2 + w2/2;
+    float right = r1 < r2 ? r1 : r2;
+    return right - left;
+}
+
+static float box_intersection(box a, box b)
+{
+    float w = overlap(a.x, a.w, b.x, b.w);
+    float h = overlap(a.y, a.h, b.y, b.h);
+    if(w < 0 || h < 0) return 0;
+    float area = w*h;
+    return area;
+}
+
+static float box_union(box a, box b)
+{
+    float i = box_intersection(a, b);
+    float u = a.w*a.h + b.w*b.h - i;
+    return u;
+}
+
+static float box_iou(box a, box b)
+{
+    return box_intersection(a, b)/box_union(a, b);
+}
+
+int draw_detections(matrix<dlib::rgb_pixel>& im, const std::vector<detection>& dets) {
+    return draw_detections(im, dets, coco_names);
 }
 
 }

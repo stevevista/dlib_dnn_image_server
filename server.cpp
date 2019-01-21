@@ -1,4 +1,3 @@
-#include <dlib/image_processing/frontal_face_detector.h>
 #include "server.h"
 #include "multipart.h"
 #include <sstream>
