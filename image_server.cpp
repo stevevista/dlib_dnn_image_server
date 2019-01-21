@@ -20,6 +20,20 @@ int box = 3;
 int mark = 3;
 int png = 0;
 
+static void save_image(const matrix<rgb_pixel>& img, const std::string& dest) {
+    auto parts = split_path(dest);
+    if (parts[2] == ".png")
+        save_png(img, dest);
+    else
+        save_jpeg(img, dest);
+}
+
+static std::string save_image_random(const matrix<rgb_pixel>& img, const std::string& basedir) {
+    auto basename = random_string() + (png ? ".png" : ".jpg");
+    save_image(img, basedir + basename);
+    return basename;
+}
+
 class image_server : public web_server {
 
     // We will also use a face landmarking model to align faces to a standard pose:  (see face_landmark_detection_ex.cpp for an introduction)
@@ -49,12 +63,11 @@ int image_server::detect_face(ostringstream& sout,
                 const string& basedir,
                 const matrix<float,0,1>& feature) {
 
-    std::vector<face_dectection> dets;
-    dets = modeler.predict_faces(img, mark);
+    auto dets = modeler.predict_faces(img, mark);
 
     if (dets.size() == 0) {
         cout << "No face detected" << endl;
-        return modeler.predict_objects(img, .5, .45);
+        return modeler.predict_objects(img);
     }
 
     // filter
@@ -68,10 +81,7 @@ int image_server::detect_face(ostringstream& sout,
     sout << "\"detects\": [";
 
     for (size_t i = 0; i < dets.size(); ++i) {
-        auto sub_path = random_string() + (png ? ".png" : ".jpg");
-
-        if (!png) save_jpeg(dets[i].face, basedir + sub_path);
-        else save_png(dets[i].face, basedir + sub_path);
+        auto sub_path = save_image_random(dets[i].face, basedir);
 
         if (box > 0)
             draw_rectangle(img, dets[i].rect, rgb_pixel(0, 255, 0), box);
@@ -107,55 +117,48 @@ void image_server::on_post_detect(std::ostream& out, const incoming_things& inco
     load_image(img,  filepath);
 
     auto basedir = get_dirname(filepath);
-    auto output_name = random_string() + (png ? ".png" : ".jpg");
     int detects = 0;
-
-    outgoing.headers["content-type"] = "application/json";
 
     sout << "{";
 
     if (spec == "detect_object") {
-        detects = modeler.predict_objects(img, .5, .45);
+        detects = modeler.predict_objects(img);
     } else {
+        matrix<float,0,1> feature;
         auto bench_data = split_float_array(spec);
         if (bench_data.size() == 128) {
-
-            matrix<float,0,1> feature;
             feature.set_size(128);
             for (int i=0; i< feature.size(); i++) {
                 feature(i) = bench_data[i];
             }
-            detects = detect_face(sout, 
+        }
+
+        detects = detect_face(sout, 
                 img,
                 basedir,
                 feature);
-        } else {
-            detects = detect_face(sout, 
-                img,
-                basedir,
-                matrix<float,0,1>());
-        }
     }
 
     if (detects > 0) {
-        if (!png) save_jpeg(img, basedir + output_name);
-        else save_png(img, basedir + output_name);
-
-        sout << "\"output\":\"" << output_name << "\"";
-
         if (upload_path.size()) {
-            outgoing.headers["Content-Type"] = png ? "image/png" : "image/jpeg";
-            send_file(
-                out,
-                outgoing,
-                basedir + output_name);
-            return;
+            save_image(img, upload_path);
+        } else {
+            auto output_name = save_image_random(img, basedir);
+            sout << "\"output\":\"" << output_name << "\"";
         }
     }
             
-    sout << "}" << endl;
-
-    write_http_response(out, outgoing, sout.str());
+    if (upload_path.size()) {
+        outgoing.headers["Content-Type"] = png ? "image/png" : "image/jpeg";
+        send_file(
+                out,
+                outgoing,
+                upload_path);
+    } else {
+        sout << "}" << endl;
+        outgoing.headers["content-type"] = "application/json";
+        write_http_response(out, outgoing, sout.str());
+    }
 }
 
 
@@ -166,47 +169,39 @@ void image_server::on_post_resize(std::ostream& out, const incoming_things& inco
     if (upload_path.size())
         filepath = upload_path;
 
-    matrix<rgb_pixel> img;
-
-    auto basedir = get_dirname(filepath);
-    string converted_name;
-    
     try {
+        matrix<rgb_pixel> img;
         load_image(img,  filepath);
 
         if (img.nr() > 1000 && img.nc() > 1000) {
             double scale = ((double)1000) / img.nr();
             resize_image(scale, img);
-            
-            auto output_file = random_string() + (png ? ".png" : ".jpg");
-            if (!png) save_jpeg(img, basedir + output_file);
-            else save_png(img, basedir + output_file);
 
-            converted_name = output_file;
+            if (!upload_path.size()) {
+                auto basedir = get_dirname(filepath);
+                auto output_file = save_image_random(img, basedir);
+
+                std::string sout = "{\"path\":\"" + output_file + "\"}";
+                outgoing.headers["content-type"] = "application/json";
+                write_http_response(out, outgoing, sout);
+                return;
+            } else {
+                save_image(img, upload_path);
+            }
         }
     } catch(exception& e) {
         cout << e.what() << endl;
     }
     
-    if (!converted_name.size()) {
+    if (!upload_path.size()) {
         outgoing.headers["content-type"] = "application/json";
         write_http_response(out, outgoing, "{}");
-        return;
-    }
-
-    if (!upload_path.size()) {
-        ostringstream sout;
-        sout << "{";
-        sout << "\"path\":\"" << converted_name << "\"";
-        sout << "}";
-        outgoing.headers["content-type"] = "application/json";
-        write_http_response(out, outgoing, sout.str());
     } else {
         outgoing.headers["Content-Type"] = png ? "image/png" : "image/jpeg";
         send_file(
             out,
             outgoing,
-            basedir + converted_name);
+            upload_path);
     }
 }
 

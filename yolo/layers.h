@@ -16,8 +16,6 @@ class ConvolutionalLayer : public layer {
   ACTIVATION activation;
   resizable_tensor filters;
   resizable_tensor gamma;
-  resizable_tensor running_means;
-  resizable_tensor running_variances;
   resizable_tensor beta;
 
   tt::tensor_conv conv;

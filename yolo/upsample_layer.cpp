@@ -15,21 +15,7 @@ UpSampleLayer::UpSampleLayer(int c, int h, int w, int _stride)
 
 const tensor& UpSampleLayer::forward_layer(const tensor& input)
 {
-    output = 0;
-    float *out = output.host();
-    const float *in = input.host();
-    const int h = input.nr();
-    const int w = input.nc();
-
-    for(int k = 0; k < input.k(); ++k) {
-            for(int j = 0; j < h*stride; ++j){
-                for(int i = 0; i < w*stride; ++i){
-                    int in_index = k*w*h + (j/stride)*w + i/stride;
-                    int out_index = k*w*h*stride*stride + j*w*stride + i;
-                    out[out_index] = in[in_index];
-                }
-            }
-    }
+    tt::resize_bilinear(output, input);
     return output;
 }
 

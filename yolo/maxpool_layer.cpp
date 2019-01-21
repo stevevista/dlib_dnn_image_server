@@ -20,7 +20,6 @@ const tensor& MaxPoolLayer::forward_layer(const tensor& input)
     if (stride != 1) {
         mp.setup_max_pooling(window_size, window_size, stride, stride, 0, 0);
         mp(output, input);
-        return output;
     } else {
         int w_offset = -(window_size -1)/2;
         int h_offset = -(window_size -1)/2;

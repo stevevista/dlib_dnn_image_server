@@ -261,11 +261,6 @@ LayerPtr network::back() {
 
 void network::load_weights(const char *filename)
 {
-#ifdef GPU
-    if(gpu_index >= 0){
-        cuda_set_device(gpu_index);
-    }
-#endif
     fprintf(stderr, "Loading weights from %s...", filename);
     fflush(stdout);
     FILE *fp = fopen(filename, "rb");

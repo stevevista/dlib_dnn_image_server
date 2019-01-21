@@ -24,12 +24,18 @@ RouteLayer::RouteLayer(std::vector<LayerPtr> inputlayers)
 
 const tensor& RouteLayer::forward_layer(const tensor&)
 {
-    int offset = 0;
+    size_t k_offset = 0;
     for(auto in : input_layers) {
-        const float *input = in->get_output().host();
-        int input_size = in->get_output().size();
-        memcpy(output.host() + offset, input, sizeof(float) * input_size);
-        offset += input_size;
+        size_t count_k = in->get_output().k();
+        tt::copy_tensor(
+            false,
+            output,
+            k_offset,
+            in->get_output(),
+            0,
+            count_k
+        );
+        k_offset += count_k;
     }
     return output;
 }

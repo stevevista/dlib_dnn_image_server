@@ -15,13 +15,6 @@ ConvolutionalLayer::ConvolutionalLayer(int c, int h, int w, int n, int _size, in
 
     beta.set_size(1, out_c);
     filters.set_size(out_c, c, size, size);
-
-    if (batch_normalize) {
-        gamma.set_size(1, out_c);
-        running_means.set_size(1, out_c);
-        running_variances.set_size(1, out_c);
-    }
-
     output.set_size(1, out_c, out_h, out_w);
 
     leaky_param.set_size(1);
@@ -31,11 +24,21 @@ ConvolutionalLayer::ConvolutionalLayer(int c, int h, int w, int n, int _size, in
 }
 
 void ConvolutionalLayer::load_weights(FILE *fp) {
-    fread(beta.host(), sizeof(float), beta.size(), fp);
-    if (this->batch_normalize){
-        fread(this->gamma.host(), sizeof(float), this->out_c, fp);
-        fread(this->running_means.host(), sizeof(float), this->out_c, fp);
-        fread(this->running_variances.host(), sizeof(float), this->out_c, fp);
+    if (this->batch_normalize) {
+        resizable_tensor sg, sb, running_means, running_variances;
+        sg.set_size(1, out_c);
+        sb.set_size(1, out_c);
+        running_means.set_size(1, out_c);
+        running_variances.set_size(1, out_c);
+        fread(sb.host(), sizeof(float), sb.size(), fp);
+        fread(sg.host(), sizeof(float), sg.size(), fp);
+        fread(running_means.host(), sizeof(float), this->out_c, fp);
+        fread(running_variances.host(), sizeof(float), this->out_c, fp);
+
+        gamma = pointwise_multiply(mat(sg), 1.0f/sqrt(mat(running_variances) + .000001f));
+        beta = mat(sb) - pointwise_multiply(mat(gamma), mat(running_means));
+    } else {
+        fread(beta.host(), sizeof(float), beta.size(), fp);
     }
     fread(filters.host(), sizeof(float), filters.size(), fp);
 }
@@ -53,7 +56,7 @@ const tensor& ConvolutionalLayer::forward_layer(const tensor& input)
         filters);
 
     if(this->batch_normalize) {
-        tt::batch_normalize_conv_inference(.000001f, output, output, gamma, beta, running_means, running_variances);
+        tt::affine_transform_conv(output, output, gamma, beta);
     } else {
         tt::add(1,output,1, beta);
     }
