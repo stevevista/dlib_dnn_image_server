@@ -1,242 +1,320 @@
 #include "multipart.h"
 #include "utils.h"
 
-MultipartParser::MultipartParser(ClientInterface *client, const string& _boundary)
-: boundary(_boundary)
-{
-	this->client = client;
+const string base64_encoding =	
+                    "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+                    "abcdefghijklmnopqrstuvwxyz"
+                    "0123456789+/";
 
-    state = PRE;
-    posn = 0;
-    data_parser = 0;
+unsigned long Base64Parser::read_at_least(unsigned char* buf, unsigned long expect) {
+    unsigned long nread = 0;
+    
+    while (nread  < expect) {
+        unsigned char c;
+        if (!parser->get_char(c))
+            break;
+
+        if (c == '=') {
+            buffer = buffer << 6;
+            pad += 6;
+            buflen++;
+        } else {
+            size_t pos = base64_encoding.find(c);
+            if (std::string::npos != pos) {
+                buffer = buffer << 6;
+                buffer = buffer | (pos & 0x3f);
+                buflen++;
+            }
+        }
+
+        if (buflen == 4) {
+            for (int i = 0; i < 3; i++) {
+                if ((i * 8) > (16 - pad)) continue;
+                unsigned char c = (buffer & 0xff0000) >> 16;
+                buf[nread++] = c;
+                buffer = buffer << 8;
+            }
+            buflen = 0;
+            buffer = 0;
+            pad = 0;
+        }
+    }
+    return nread;
 }
 
-void MultipartParser::parse(unsigned char c) {
+unsigned long QuotedPrintableParser::read_at_least(unsigned char* buf, unsigned long expect) {
+    unsigned long nread = 0;
+    
+    while (nread  < expect) {
+        unsigned char c;
+        if (!parser->get_char(c))
+            break;
 
-    if (state == PRE) {
-        if (c == boundary[posn])
-            posn++;
-        else {
-            if (c == boundary[0])
-                posn = 1;
-            else
-                posn = 0;
+        if (state == SPECIAL) {
+            static const std::string v = "0123456789ABCDEF";
+            if (v.find(c) == std::string::npos) continue;
+            buffer = buffer << 8 | (v.find(c));
+            buflen++;
+            if (buflen == 2) {
+                c = (unsigned char) buffer;
+                buf[nread++] = c;
+                state = NORMAL;
+            }
+            continue;
         }
 
-        if (posn == boundary.size()) {
-            state = ATBOUND;
-            posn = 0;
+        if (c == '=') {
+            state = SPECIAL;
+            buflen = 0;
+            continue;
         }
 
-        return;
+        // Normal character, output it
+        buf[nread++] = c;
     }
+
+    return nread;
+}
+
+unsigned long SimpleParser::read_at_least(unsigned char* buf, unsigned long expect) {
+    unsigned long nread = 0;
+    
+    while (nread  < expect) {
+        unsigned char c;
+        if (!parser->get_char(c))
+            break;
+
+        buf[nread++] = c;
+    }
+
+    return nread;
+}
+
+bool MultipartParser::get_char(unsigned char& c) {
+    if (buffpos < readbuff.size()) {
+        c = readbuff[buffpos++];
+        if (buffpos == readbuff.size()) {
+            readbuff.clear();
+            buffpos = 0;
+        }
+        return true;
+    }
+
+    // buffer empty
+    if (!in.good() || consumed >= content_length) {
+        return false;
+    }
+
+    unsigned char cdata = in.get();
+    consumed++;
+
+    if (cdata != boundary[readbuff.size()]) {
+        c = cdata;
+        return true;
+    }
+
+    readbuff.push_back(cdata);
+
+    while (readbuff.back() == boundary[readbuff.size() - 1]) {
         
-    if (state == ATBOUND) {
-        if (c == '-') {
-            state = FOLLBOUND;
-            return;
+        if (readbuff.size() == boundary.size()) {
+            readbuff.clear();
+            state = ATBOUND;
+            return false;
         }
-        if (c == '\r') {
-            state = FOLLBOUND;
-            return;
+        if (!in.good() || consumed >= content_length) {
+            break;
         }
-        if (c == '\n') {
-            state = STARTOBJECT;
-            return;
-        }
-        throw std::logic_error("MIME duff boundary stuff");
+        cdata = in.get();
+        consumed++;
+        readbuff.push_back(cdata);
     }
 
-    if (state == FOLLBOUND) {
-        if (c == '-') {
-            state = DONE;
-            return;
-        }
-        if (c == '\n') {
-            state = STARTOBJECT;
-            return;
-        }
-        throw std::logic_error("MIME duff boundary stuff");
+    c = readbuff[buffpos++];
+    if (buffpos == readbuff.size()) {
+        readbuff.clear();
+        buffpos = 0;
     }
+  
+    return true;
+}
 
-    if (state == STARTOBJECT) {
+MultipartParser::MultipartParser(const string& _boundary, std::istream& _in, unsigned long _content_length)
+: boundary(_boundary)
+, in(_in)
+, content_length(_content_length)
+, consumed(0)
+, buffpos(0)
+{
+    state = PRE;
+}
 
-        if (data_parser) {
-			client->data_end();
-            delete data_parser;
-            data_parser = 0;
-        }
-
-        parsed_fields.clear();
-        state = OBJECT_PREKEY;
-        posn = 0;
-        buffered.clear();
-        // go through
-    }
-
-    if (state == OBJECT_PREKEY) {
-        if (c == ' ' || c == '\t') return;
-		if (c == ':') throw std::logic_error("Zero length key?");
-		state = OBJECT_KEY;
-		key = tolower(c);
-        return;
-    }
-
-    if (state > OBJECT_PREKEY) {
-        if (c == boundary[posn]) {
-            posn++;
-            if (posn == boundary.size()) {
-                state = ATBOUND;
-                posn = 0;
+void MultipartParser::parse(onFieldCallback onField) {
+    while (true) {
+        unsigned char c;
+        if (!get_char(c)) {
+            // EOF
+            if (state != ATBOUND) {
                 return;
             }
-            buffered.push_back(c);
-        } else {
-            // Dispose of buffer
-            if (posn) {
-                for (auto bc : buffered)
-                    parseSection(bc);
-                buffered.clear();
-                posn = 0;
-            }
-
-            // This character may start the match again.
-            if (c == boundary[0]) {
-                posn = 1;
-                buffered.push_back(c);
-            } else {
-                posn = 0;
-                parseSection(c);
-            }
-        }
-        return;
-    }
-
-
-}
-
-void MultipartParser::parseSection(unsigned char c) {
-    if (state == OBJECT_KEY) {
-        if (c == ' ' || c == '\t') return;
-        if (c == ':') {
-            state = OBJECT_PREVAL;
-            return;
+            continue;
         }
 
-        key += tolower(c);
-        return;
-    }
-
-    if (state == OBJECT_PREVAL) {
-                    if (c == ' ' || c == '\t') return;
-                    if (c == '\r') {
-                        state = OBJECT_CR;
-                        return;
-                    }
-                    if (c == '\n') {
-                        state = OBJECT_EOL;
-                        return;
-                    }
-			        value = c;
-			        state = OBJECT_VAL;
-			        return;
+        switch (state) {
+            case ATBOUND: {
+                if (c == '-') {
+                    state = FOLLBOUND;
                 }
-                
-    if (state == OBJECT_VAL) {
-        if (c == '\r') {
-            state = OBJECT_CR;
-            return;
-        }
-        if (c == '\n') {
-            state = OBJECT_EOL;
-            return;
-        }
+                else if (c == '\r') {
+                    state = FOLLBOUND;
+                }
+                else if (c == '\n') {
+                    state = STARTOBJECT;
+                }
+                else throw std::logic_error("MIME duff boundary stuff");
+                break;
+            }
+            case FOLLBOUND: {
+                if (c == '-') {
+                    // done !
+                    return;
+                }
+                else if (c == '\n') {
+                    state = STARTOBJECT;
+                }
+                else throw std::logic_error("MIME duff boundary stuff");
+                break;
+            }
+            case STARTOBJECT: {
+                parsed_fields.clear();
 
-        value += c;
-        return;
-    }
-                
-    if (state == OBJECT_CR) {
-        if (c == '\n') {
-            state = OBJECT_EOL;
-            return;
-        }
-        throw std::logic_error("CR without LF in MIME header?");
-    }
-                
-    if (state == OBJECT_EOL) {
-        // This deals with continuation.
-        if (c == ' ' || c == '\t') {
-            state = OBJECT_VAL;
-            return;
-        }
+                if (c == ' ' || c == '\t') break;
+                if (c == ':') throw std::logic_error("Zero length key?");
+                state = OBJECT_KEY;
+                key = std::tolower(c);
+                break;
+            }
+            case OBJECT_KEY: {
+                if (c == ' ' || c == '\t') break;
+                if (c == ':') {
+                    state = OBJECT_PREVAL;
+                    break;
+                }
 
-        // Not a continue, save key/value if there is one.
-        if (key != "") {
-            add_header(key, value);
-            key = "";
-            value = "";
+                key += std::tolower(c);
+                break;
+            }
+            case OBJECT_PREVAL: {
+                if (c == ' ' || c == '\t') break;
+                if (c == '\r') {
+                    state = OBJECT_CR;
+                    break;
+                }
+                if (c == '\n') {
+                    state = OBJECT_EOL;
+                    break;
+                }
+                value = c;
+                state = OBJECT_VAL;
+                break;
+            }
+            case OBJECT_VAL: {
+                if (c == '\r') {
+                    state = OBJECT_CR;
+                    break;
+                }
+                if (c == '\n') {
+                    state = OBJECT_EOL;
+                    break;
+                }
+
+                value += c;
+                break;
+            }
+            case OBJECT_CR: {
+                if (c == '\n') {
+                    state = OBJECT_EOL;
+                }
+                else throw std::logic_error("CR without LF in MIME header?");
+                break;
+            }
+            case OBJECT_EOL: {
+                // This deals with continuation.
+                if (c == ' ' || c == '\t') {
+                    state = OBJECT_VAL;
+                    break;
+                }
+                // Not a continue, save key/value if there is one.
+                if (key != "") {
+                    add_header(key, value);
+                    key = "";
+                    value = "";
+                }
+
+                if (c == '\r') {
+                    break; 
+                }
+
+                if (c == '\n') {
+                    object_created(parsed_fields, onField);
+                    break;
+                }
+
+                // EOL, now reading a key.
+                state = OBJECT_KEY;
+                key = std::tolower(c);
+                break;
+            }
         }
-
-        if (c == '\r') {
-            return; 
-        }
-
-        if (c == '\n') {
-            state = OBJECT_HEADER_COMPLETE;
-            client->object_created(parsed_fields);
-            return;
-        }
-
-        // EOL, now reading a key.
-        state = OBJECT_KEY;
-        key = tolower(c);
-        return;
-    }
-
-    if (state == OBJECT_HEADER_COMPLETE) {
-        if (data_parser)
-            delete data_parser;
-
-        // Use the parser factory to get an appropriate parser.
-        std::string encoding =
-            parsed_fields["content-transfer-encoding"].value;
-
-        if (encoding == "base64") {
-            data_parser = new Base64Parser(client);
-        }
-        else if (encoding == "quoted-printable") {
-            data_parser = new QuotedPrintableParser(client);
-        }
-        else {
-            data_parser = new SimpleParser(client);
-        }
-
-        state = OBJECT_BODY;
-        // go through
-    }
-                
-    if (state == OBJECT_BODY) {
-        data_parser->parse(c);
-        return;
     }
 }
 
-void MultipartParser::close()
-{
-    // Dispose of buffer
-    if (posn) {
-        for (auto bc : buffered)
-            parseSection(bc);
-        buffered.clear();
-        posn = 0;
+void MultipartParser::object_created(const std::map<std::string, HeaderField>& fields, onFieldCallback onField) {
+    string field_name;
+    string file_name;
+    string field_value;
+
+    for (const auto& field : fields) {
+        if (field.first == "content-disposition" && field.second.value == "form-data") {
+            for (const auto& attr : field.second.attributes) {
+                if (attr.first == "name") {
+                    field_name = attr.second;
+                } else if (attr.first == "filename") {
+                    file_name = attr.second;
+                }
+            }
+        }
     }
 
-    // Dispose of buffer
-    if (data_parser) {
-        client->data_end();
-        delete data_parser;
+    DataParser *data_parser;
+
+    // Use the parser factory to get an appropriate parser.
+    std::string encoding =
+                    parsed_fields["content-transfer-encoding"].value;
+
+    if (encoding == "base64") {
+        data_parser = new Base64Parser(this);
     }
+    else if (encoding == "quoted-printable") {
+        data_parser = new QuotedPrintableParser(this);
+    }
+    else {
+        data_parser = new SimpleParser(this);
+    }
+
+    if (file_name.size()) {
+        onField(field_name, file_name, "", data_parser);
+    } else {
+        unsigned char buf[128 + 4];
+        while (true) {
+            auto nread = data_parser->read_at_least(buf, 128);
+            field_value += string((char*)buf, nread);
+            if (nread < 128) 
+                break;
+        }
+        onField(field_name, "", field_value, nullptr);
+    }
+    delete data_parser;
 }
 
 void MultipartParser::add_header(const std::string &key, const std::string &value) {
@@ -316,47 +394,3 @@ void MultipartParser::parse_attrs(HeaderField &fld)
 	}
 }
 
-void MultipartHandler::object_created(const std::map<std::string, HeaderField>& fields) {
-  part.field_name = "";
-  part.file_name = "";
-  part.buffer = "";
-
-  for (const auto& field : fields) {
-        if (field.first == "content-disposition" && field.second.value == "form-data") {
-            for (const auto& attr : field.second.attributes) {
-                if (attr.first == "name") {
-                    part.field_name = attr.second;
-                } else if (attr.first == "filename") {
-                    part.file_name = attr.second;
-                }
-            }
-        }
-  }
-
-  if (part.file_name.size()) {
-    auto parts = split_path(part.file_name);
-    auto storename = random_string() + parts[2];
-    part.path = dest_dir + storename;
-    part.ofs.open(part.path, ofstream::binary);
-  }
-
-}
-
-void MultipartHandler::data_end()
-{
-    if (part.file_name.empty()) {
-        incoming.queries[part.field_name] = part.buffer;
-    } else {
-      part.ofs.close();
-      files.push_back({part.field_name, part.file_name, part.path});
-    }
-}
-
-void MultipartHandler::data(unsigned char *data, int len)
-{
-    if (part.file_name.empty()) {
-        part.buffer += string((char*)data, len);
-    } else {
-      part.ofs.write((const char*)data, len);
-    }
-}

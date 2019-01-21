@@ -1,6 +1,7 @@
 #include "server.h"
 #include "multipart.h"
 #include <sstream>
+#include "utils.h"
 
 static std::vector<string> split_route(const string& name) {
 
@@ -92,22 +93,34 @@ void web_server::read_body (
             } 
             
             if (boundary.size()) {
-                MultipartHandler handler(incoming, upload_dir);
-                MultipartParser parser(&handler, boundary);
+                MultipartParser parser(boundary, in, content_length);
 
-                unsigned long comsumed = 0;
-                while (in.good() && comsumed < content_length) {
-                    unsigned char c = in.get();
-                    parser.parse(c);
-                    comsumed++;
-                }
-                parser.close();
+                parser.parse([&](const string& name, const string& filename, const string& value, DataParser* data_parser) {
+                    // cout << "field: " << name << ", filename: " << filename << ", value: " << value << endl;
+                    if (filename.size()) {
+                        if (data_parser) {
+                            auto parts = split_path(filename);
+                            auto storename = random_string() + parts[2];
+                            auto path = upload_dir + storename;
+                            std::ofstream ofs(path, ofstream::binary);
+                            
+                            unsigned char buff[4096 + 4];
+                            while (true) {
+                                auto nread = data_parser->read_at_least(buff, 4096);
+                                ofs.write((const char*)buff, nread);
+                                if (nread < 4096) {
+                                    break;
+                                }
+                            }
+                            ofs.close();
 
-                for (const auto& f : handler.files) {
-                    incoming.queries["files/" + f.field_name + "/field"] = f.field_name;
-                    incoming.queries["files/" + f.field_name + "/name"] = f.name;
-                    incoming.queries["files/" + f.field_name + "/path"] = f.path;
-                }
+                            incoming.queries["files/" + name + "/name"] = filename;
+                            incoming.queries["files/" + name + "/path"] = path;
+                        }
+                    } else {
+                        incoming.queries[name] = value;
+                    }
+                });
             }
             else {
                 incoming.body.resize(content_length);
