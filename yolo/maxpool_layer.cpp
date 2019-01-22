@@ -32,7 +32,7 @@ const tensor& MaxPoolLayer::forward_layer(const tensor& input)
         auto input_ptr = input.host();
         auto output_ptr = output.host();
 
-        for(int k = 0; k < c; ++k){
+        for(int k = 0; k < c; ++k) {
             for(int i = 0; i < h; ++i){
                 for(int j = 0; j < w; ++j){
                     int out_index = j + w*(i + h*(k));

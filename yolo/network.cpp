@@ -253,8 +253,6 @@ NetworkPtr loadYoloNet(const std::string& data_dir, const std::string& filename)
     return net;
 }
 
-// 143
-
 LayerPtr network::back() {
     return layers.back();
 }
@@ -294,24 +292,12 @@ void network::predict(const tensor& x)
     }
 }
 
-void do_nms_sort(std::vector<detection>& dets, float thresh);
+void do_nms(std::vector<detection>& dets, float thresh);
 
-std::vector<detection> network::predict_boxes(int w, int h, float thresh, float nms)
+std::vector<detection> network::predict_boxes(int img_w, int img_h, int new_w, int new_h, float thresh, float nms)
 {
     const int netw = this->w;
     const int neth = this->h;
-    int new_w=0;
-    int new_h=0;
-    float ratio_w = (float)netw/w;
-    float ratio_h = (float)neth/h;
-
-    if (ratio_w < ratio_h) {
-        new_w = netw;
-        new_h = h*ratio_w;
-    } else {
-        new_h = neth;
-        new_w = w * ratio_h;
-    }
 
     std::vector<detection> dets;
 
@@ -331,31 +317,23 @@ std::vector<detection> network::predict_boxes(int w, int h, float thresh, float 
         det.bbox.h /= new_h;
     }
 
-    do_nms_sort(dets, nms);
-    return dets;
-}
+    do_nms(dets, nms);
 
-static float box_iou(box a, box b);
+    for (auto& det : dets) {
+        box b = det.bbox;
+        int left  = (b.x-b.w/2.)*img_w;
+        int right = (b.x+b.w/2.)*img_w;
+        int top   = (b.y-b.h/2.)*img_h;
+        int bot   = (b.y+b.h/2.)*img_h;
 
-
-void do_nms_sort(std::vector<detection>& dets, float thresh)
-{
-    const int total = dets.size();
-    const int classes = total ? dets[0].prob.size() : 0;
-
-    for(int k = 0; k < classes; ++k) {
-        std::sort(dets.begin(), dets.end(), [=](const detection& a, const detection& b) { return a.prob[k] > b.prob[k]; });
-        for(int i = 0; i < total; ++i){
-            if(dets[i].prob[k] == 0) continue;
-            box a = dets[i].bbox;
-            for(int j = i+1; j < total; ++j) {
-                box b = dets[j].bbox;
-                if (box_iou(a, b) > thresh){
-                    dets[j].prob[k] = 0;
-                }
-            }
-        }
+        if(left < 0) left = 0;
+        if(right > img_w-1) right = img_w-1;
+        if(top < 0) top = 0;
+        if(bot > img_h-1) bot = img_h-1;
+        det.rect = rectangle(left, top, right, bot);
     }
+
+    return dets;
 }
 
 static float overlap(float x1, float w1, float x2, float w2)
@@ -388,6 +366,33 @@ static float box_union(box a, box b)
 static float box_iou(box a, box b)
 {
     return box_intersection(a, b)/box_union(a, b);
+}
+
+void do_nms(std::vector<detection>& dets, float thresh)
+{
+    const int total = dets.size();
+    const int classes = total ? dets[0].prob.size() : 0;
+
+    for(int k = 0; k < classes; ++k) {
+        std::sort(dets.begin(), dets.end(), [=](const detection& a, const detection& b) { return a.prob[k] > b.prob[k]; });
+        for(int i = 0; i < total; ++i){
+            if(dets[i].prob[k] == 0) continue;
+            dets[i].candicates.push_back(k);
+            box a = dets[i].bbox;
+            for(int j = i+1; j < total; ++j) {
+                if(dets[j].prob[k] == 0) continue;
+                box b = dets[j].bbox;
+                if (box_iou(a, b) > thresh) {
+                    dets[j].prob[k] = 0;
+                }
+            }
+        }
+    }
+
+    dets.erase(std::remove_if(dets.begin(), 
+                              dets.end(),
+                              [](const detection& a){ return a.candicates.empty(); }),
+               dets.end());
 }
 
 int draw_detections(matrix<dlib::rgb_pixel>& im, const std::vector<detection>& dets) {

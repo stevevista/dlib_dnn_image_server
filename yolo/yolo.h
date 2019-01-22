@@ -23,7 +23,9 @@ struct box {
 
 struct detection {
     box bbox;
+    rectangle rect;
     std::vector<float> prob;
+    std::vector<int> candicates;
     float objectness;
 };
 
@@ -43,7 +45,7 @@ struct network {
     
     void load_weights(const char *filename);
     void predict(const tensor& x);
-    std::vector<detection> predict_boxes(int w, int h, float thresh, float nms);
+    std::vector<detection> predict_boxes(int img_w, int img_h, int new_w, int new_h, float thresh, float nms);
 
     template<typename image_type>
     std::vector<detection> predict_yolo(const image_type& src_img, float thresh, float nms) {
@@ -87,7 +89,7 @@ struct network {
             }
         }
 
-        return predict_boxes(src_img.nc(), src_img.nr(), thresh, nms);
+        return predict_boxes(src_img.nc(), src_img.nr(), new_w, new_h, thresh, nms);
     }
 
     int h, w;

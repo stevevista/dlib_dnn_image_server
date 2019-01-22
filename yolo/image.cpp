@@ -111,52 +111,31 @@ void draw_labled_rectangle(image_type& img, const rectangle& rect, const std::st
 
 int draw_detections(matrix<dlib::rgb_pixel>& im, const std::vector<detection>& dets, const std::vector<std::string>& names)
 {
-    int detected_count = 0;
     const int classes = dets.size() ? dets[0].prob.size() : 0;
 
     for(auto& det : dets) {
         std::string labelstr;
-        int _class = -1;
-        for(int j = 0; j < classes; ++j){
-            std::string label = j < names.size() ? names[j] : std::to_string(j);
-            if (det.prob[j]) {
-                if (_class < 0) {
-                    labelstr = label;
-                    _class = j;
-                } else {
-                    labelstr += ", ";
-                    labelstr += label;
-                }
-                printf("%s: %.0f%%\n", label.c_str(), det.prob[j]*100);
+        for (auto cls : det.candicates) {
+            std::string label = cls < names.size() ? names[cls] : std::to_string(cls);
+            if (labelstr.size()) {
+                labelstr += ", ";
             }
+            labelstr += label;
+            printf("%s: %.0f%%\n", label.c_str(), det.prob[cls]*100);
         }
-        if(_class >= 0) {
-            detected_count++;
-            int thickness = im.nr() * .006;
 
-            //printf("%d %s: %.0f%%\n", i, names[class], prob*100);
-            rgb_pixel clr;
-            int offset = _class*123457 % classes;
-            clr.red = get_color(2,offset,classes);
-            clr.green = get_color(1,offset,classes);
-            clr.blue = get_color(0,offset,classes);
+        const int thickness = im.nr() * .006;
 
-            box b = det.bbox;
-            int left  = (b.x-b.w/2.)*im.nc();
-            int right = (b.x+b.w/2.)*im.nc();
-            int top   = (b.y-b.h/2.)*im.nr();
-            int bot   = (b.y+b.h/2.)*im.nr();
+        rgb_pixel clr;
+        int offset = det.candicates[0]*123457 % classes;
+        clr.red = get_color(2,offset,classes);
+        clr.green = get_color(1,offset,classes);
+        clr.blue = get_color(0,offset,classes);
 
-            if(left < 0) left = 0;
-            if(right > im.nc()-1) right = im.nc()-1;
-            if(top < 0) top = 0;
-            if(bot > im.nr()-1) bot = im.nr()-1;
-
-            draw_labled_rectangle(im, rectangle(left, top, right, bot), labelstr, clr, thickness);
-        }
+        draw_labled_rectangle(im, det.rect, labelstr, clr, thickness);
     }
 
-    return detected_count;
+    return dets.size();
 }
 
 }
