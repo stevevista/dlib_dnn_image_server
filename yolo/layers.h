@@ -59,7 +59,6 @@ public:
 };
 
 class UpSampleLayer : public layer {
-  const int stride;
   resizable_tensor output;
 public:
   UpSampleLayer(int c, int h, int w, int stride);

@@ -124,7 +124,8 @@ int draw_detections(matrix<dlib::rgb_pixel>& im, const std::vector<detection>& d
             printf("%s: %.0f%%\n", label.c_str(), det.prob[cls]*100);
         }
 
-        const int thickness = im.nr() * .006;
+        int thickness = im.nr() * .006;
+        if (thickness == 0) thickness = 1;
 
         rgb_pixel clr;
         int offset = det.candicates[0]*123457 % classes;

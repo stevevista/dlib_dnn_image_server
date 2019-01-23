@@ -16,7 +16,6 @@ detect_object
 
 */
 float thres = 0.6;
-int box = 3;
 int mark = 3;
 int png = 0;
 
@@ -83,8 +82,9 @@ int image_server::detect_face(ostringstream& sout,
     for (size_t i = 0; i < dets.size(); ++i) {
         auto sub_path = save_image_random(dets[i].face, basedir);
 
-        if (box > 0)
-            draw_rectangle(img, dets[i].rect, rgb_pixel(0, 255, 0), box);
+        int thickness = img.nr() * .003;
+        if (thickness == 0) thickness = 1;
+        draw_rectangle(img, dets[i].rect, rgb_pixel(0, 255, 0), thickness);
 
         if (i > 0) sout << ",";
         sout << "{\"path\":\"" << sub_path << "\"";
@@ -307,7 +307,6 @@ int main(int argc, const char* argv[])
         int mmod = get_option(cr,"mmod", 0); 
         int upsize = get_option(cr,"upsize", 800); 
         thres = get_option(cr,"thres", 0.6); 
-        box = get_option(cr,"box", 3); 
         mark = get_option(cr,"mark", 3);
         png = get_option(cr,"png", 0);
 
