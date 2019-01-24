@@ -3,16 +3,18 @@
 
 namespace darknet {
 
-MaxPoolLayer::MaxPoolLayer(int c, int h, int w, int _size, int _stride)
+MaxPoolLayer::MaxPoolLayer(LayerPtr prev, int _size, int _stride)
 : window_size(_size)
 , stride(_stride)
 {
-    this->out_w = (w - 1)/stride + 1;
-    this->out_h = (h - 1)/stride + 1;
-    this->out_c = c;
-    this->output.set_size(1, this->out_c, this->out_h, this->out_w);
+    const int w = prev->get_output().nc();
+    const int h = prev->get_output().nr();
+    const int k = prev->get_output().k();
+    const int out_w = (w - 1)/stride + 1;
+    const int out_h = (h - 1)/stride + 1;
+    output.set_size(1, k, out_h, out_w);
 
-    fprintf(stderr, "max          %d x %d / %d  %4d x%4d x%4d   ->  %4d x%4d x%4d\n", window_size, window_size, stride, w, h, c, this->out_w, this->out_h, this->out_c);
+    fprintf(stderr, "max          %d x %d / %d  %4d x%4d x%4d   ->  %4d x%4d x%4d\n", window_size, window_size, stride, w, h, k, out_w, out_h, k);
 }
 
 const tensor& MaxPoolLayer::forward_layer(const tensor& input)
@@ -24,8 +26,8 @@ const tensor& MaxPoolLayer::forward_layer(const tensor& input)
         int w_offset = -(window_size -1)/2;
         int h_offset = -(window_size -1)/2;
 
-        const int h = this->out_h;
-        const int w = this->out_w;
+        const int h = output.nr();
+        const int w = output.nc();
         const int input_w = input.nc();
         const int input_h = input.nr();
         const int c = input.k();

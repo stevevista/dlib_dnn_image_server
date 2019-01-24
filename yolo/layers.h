@@ -14,7 +14,7 @@ class ConvolutionalLayer : public layer {
   const int batch_normalize;
 
   ACTIVATION activation;
-  resizable_tensor filters;
+  resizable_tensor weights;
   resizable_tensor gamma;
   resizable_tensor beta;
 
@@ -23,6 +23,7 @@ class ConvolutionalLayer : public layer {
   resizable_tensor leaky_param;
 
 public:
+  ConvolutionalLayer(LayerPtr prev, int n, int size, int stride = 1, int padding = 1, ACTIVATION activation = LEAKY, int batch_normalize = 1);
   ConvolutionalLayer(int c, int h, int w, int n, int size, int stride = 1, int padding = 1, ACTIVATION activation = LEAKY, int batch_normalize = 1);
   const tensor& forward_layer(const tensor& net);
   const tensor& get_output() const { return output; }
@@ -35,7 +36,7 @@ class MaxPoolLayer : public layer {
   resizable_tensor output;
   tt::pooling mp;
 public:
-  MaxPoolLayer(int c, int h, int w, int size, int stride);
+  MaxPoolLayer(LayerPtr prev, int size, int stride);
   const tensor& forward_layer(const tensor& net);
   const tensor& get_output() const { return output; }
 };
@@ -53,7 +54,7 @@ class ShortcutLayer : public layer {
   LayerPtr from;
   resizable_tensor output;
 public:
-  ShortcutLayer(LayerPtr from, int oc, int oh, int ow);
+  ShortcutLayer(LayerPtr from, LayerPtr prev);
   const tensor& forward_layer(const tensor& net);
   const tensor& get_output() const { return output; }
 };
@@ -61,21 +62,21 @@ public:
 class UpSampleLayer : public layer {
   resizable_tensor output;
 public:
-  UpSampleLayer(int c, int h, int w, int stride);
+  UpSampleLayer(LayerPtr prev, int stride);
   const tensor& forward_layer(const tensor& net);
   const tensor& get_output() const { return output; }
 };
 
 class YoloLayer : public layer {
+  LayerPtr linkin;
   const int num;
-  const int classes;
+  int classes;
   const std::vector<float> biases;
   alias_tensor xy, probs;
-  const tensor* output_ptr;
 public:
-  YoloLayer(int h, int w, int classes, const std::vector<float>& biases);
+  YoloLayer(LayerPtr linkin, const std::vector<float>& biases);
   const tensor& forward_layer(const tensor& net);
-  const tensor& get_output() const { return *output_ptr; }
+  const tensor& get_output() const { return linkin->get_output(); }
   void get_yolo_detections(float thresh, std::vector<detection>& dets);
 };
 

@@ -11,8 +11,8 @@ namespace darknet {
 
 using namespace dlib;
 
-struct network;
-struct  layer;
+class network;
+class layer;
 
 typedef std::shared_ptr<layer> LayerPtr; 
 typedef std::shared_ptr<network> NetworkPtr; 
@@ -29,24 +29,28 @@ struct detection {
     float objectness;
 };
 
-struct layer {
+class layer {
+public:
     virtual ~layer() {}
     virtual void load_weights(FILE *fp) {}
     virtual const tensor& forward_layer(const tensor& net) = 0;
     virtual const tensor& get_output() const = 0;
     virtual void get_yolo_detections(float thresh, std::vector<detection>& dets) { }
-
-    int out_h, out_w, out_c;
 };
 
-struct network {
+class network {
+    std::vector<LayerPtr> layers;
+    resizable_tensor input;
+    std::mutex mtx;
 
-    LayerPtr back();
-    
-    void load_weights(const char *filename);
     void predict(const tensor& x);
     std::vector<detection> predict_boxes(int img_w, int img_h, int new_w, int new_h, float thresh, float nms);
 
+public:
+    int h, w;
+    
+    void load_weights(const std::string& filename);
+    
     template<typename image_type>
     std::vector<detection> predict_yolo(const image_type& src_img, float thresh, float nms) {
         auto img = src_img;
@@ -92,10 +96,13 @@ struct network {
         return predict_boxes(src_img.nc(), src_img.nr(), new_w, new_h, thresh, nms);
     }
 
-    int h, w;
-    std::vector<LayerPtr> layers;
-    resizable_tensor input;
-    std::mutex mtx;
+    template<typename L>
+    void add_layer(L&& layer) {
+        layers.push_back(layer);
+    }
+
+    LayerPtr back();
+    LayerPtr layer(int offset);
 } ;
 
 

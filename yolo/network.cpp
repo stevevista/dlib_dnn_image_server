@@ -91,21 +91,21 @@ const std::vector<std::string> coco_names = {
 
 void makeYoloLayers(network* net, int classes, const std::vector<float>& biases) {
     int filters = (biases.size()/2)*(classes + 4 + 1);
-    net->layers.push_back(std::make_shared<ConvolutionalLayer>(net->back()->out_c, net->back()->out_h, net->back()->out_w, filters, 1, 1, 1, LINEAR, 0));
-    net->layers.push_back(std::make_shared<YoloLayer>(net->back()->out_h, net->back()->out_w, classes, biases));
+    net->add_layer(std::make_shared<ConvolutionalLayer>(net->back(), filters, 1, 1, 1, LINEAR, 0));
+    net->add_layer(std::make_shared<YoloLayer>(net->back(), biases));
 }
 
 void makeShortcuts(network* net, int filters) {
-    net->layers.push_back(std::make_shared<ConvolutionalLayer>(net->back()->out_c, net->back()->out_h, net->back()->out_w, filters, 1));
-    net->layers.push_back(std::make_shared<ConvolutionalLayer>(net->back()->out_c, net->back()->out_h, net->back()->out_w, filters*2, 3));
-    net->layers.push_back(std::make_shared<ShortcutLayer>(net->layers[net->layers.size() - 3], net->back()->out_c, net->back()->out_h, net->back()->out_w));
+    net->add_layer(std::make_shared<ConvolutionalLayer>(net->back(), filters, 1));
+    net->add_layer(std::make_shared<ConvolutionalLayer>(net->back(), filters*2, 3));
+    net->add_layer(std::make_shared<ShortcutLayer>(net->layer(-3), net->back()));
 }
 
 void makeDownSamples(network* net, int filters, int repeats) {
-    net->layers.push_back(std::make_shared<ConvolutionalLayer>(net->back()->out_c, net->back()->out_h, net->back()->out_w, filters*2, 3, 2));
-    net->layers.push_back(std::make_shared<ConvolutionalLayer>(net->back()->out_c, net->back()->out_h, net->back()->out_w, filters, 1));
-    net->layers.push_back(std::make_shared<ConvolutionalLayer>(net->back()->out_c, net->back()->out_h, net->back()->out_w, filters*2, 3));
-    net->layers.push_back(std::make_shared<ShortcutLayer>(net->layers[net->layers.size() - 3], net->back()->out_c, net->back()->out_h, net->back()->out_w));
+    net->add_layer(std::make_shared<ConvolutionalLayer>(net->back(), filters*2, 3, 2));
+    net->add_layer(std::make_shared<ConvolutionalLayer>(net->back(), filters, 1));
+    net->add_layer(std::make_shared<ConvolutionalLayer>(net->back(), filters*2, 3));
+    net->add_layer(std::make_shared<ShortcutLayer>(net->layer(-3), net->back()));
 
     for (int i = 0; i < repeats; i++) {
         makeShortcuts(net, filters);
@@ -113,16 +113,16 @@ void makeDownSamples(network* net, int filters, int repeats) {
 }
 
 void makeUpSamples(network* net, int filters, int route_index) {
-    net->layers.push_back(std::make_shared<RouteLayer>(std::vector<LayerPtr>{net->layers[net->layers.size() - 4]}));
-    net->layers.push_back(std::make_shared<ConvolutionalLayer>(net->back()->out_c, net->back()->out_h, net->back()->out_w, filters, 1));
-    net->layers.push_back(std::make_shared<UpSampleLayer>(net->back()->out_c, net->back()->out_h, net->back()->out_w, 2));
-    net->layers.push_back(std::make_shared<RouteLayer>(std::vector<LayerPtr>{net->layers[net->layers.size() - 1], net->layers[route_index]}));
+    net->add_layer(std::make_shared<RouteLayer>(std::vector<LayerPtr>{net->layer(-4)}));
+    net->add_layer(std::make_shared<ConvolutionalLayer>(net->back(), filters, 1));
+    net->add_layer(std::make_shared<UpSampleLayer>(net->back(), 2));
+    net->add_layer(std::make_shared<RouteLayer>(std::vector<LayerPtr>{net->layer(-1), net->layer(route_index)}));
 }
 
 void repeatConvolutionalLayers(network* net, int filters, int repeats) {
     for (int i = 0; i < repeats; i++) {
-        net->layers.push_back(std::make_shared<ConvolutionalLayer>(net->back()->out_c, net->back()->out_h, net->back()->out_w, filters, 1));
-        net->layers.push_back(std::make_shared<ConvolutionalLayer>(net->back()->out_c, net->back()->out_h, net->back()->out_w, filters*2, 3));
+        net->add_layer(std::make_shared<ConvolutionalLayer>(net->back(), filters, 1));
+        net->add_layer(std::make_shared<ConvolutionalLayer>(net->back(), filters*2, 3));
     }
 }
 
@@ -133,12 +133,12 @@ NetworkPtr YoloSPPNet(const std::string& data_dir)
     net->w  = 608; 
     net->h = 608;
 
-    net->layers.push_back(std::make_shared<ConvolutionalLayer>(3, net->h, net->w, 32, 3));
+    net->add_layer(std::make_shared<ConvolutionalLayer>(3, net->h, net->w, 32, 3));
     // Downsample
-    net->layers.push_back(std::make_shared<ConvolutionalLayer>(net->back()->out_c, net->back()->out_h, net->back()->out_w, 64, 3, 2));
+    net->add_layer(std::make_shared<ConvolutionalLayer>(net->back(), 64, 3, 2));
     makeShortcuts(net.get(), 32);
     // Downsample
-    net->layers.push_back(std::make_shared<ConvolutionalLayer>(net->back()->out_c, net->back()->out_h, net->back()->out_w, 128, 3, 2));
+    net->add_layer(std::make_shared<ConvolutionalLayer>(net->back(), 128, 3, 2));
     makeShortcuts(net.get(), 64);
     makeShortcuts(net.get(), 64);
     // Downsample
@@ -147,14 +147,14 @@ NetworkPtr YoloSPPNet(const std::string& data_dir)
     makeDownSamples(net.get(), 512, 3);
 
     repeatConvolutionalLayers(net.get(), 512, 1);
-    net->layers.push_back(std::make_shared<ConvolutionalLayer>(net->back()->out_c, net->back()->out_h, net->back()->out_w, 512, 1));
+    net->add_layer(std::make_shared<ConvolutionalLayer>(net->back(), 512, 1));
     // SPP
-    net->layers.push_back(std::make_shared<MaxPoolLayer>(net->back()->out_c, net->back()->out_h, net->back()->out_w, 5, 1));
-    net->layers.push_back(std::make_shared<RouteLayer>(std::vector<LayerPtr>{net->layers[net->layers.size() - 2]}));
-    net->layers.push_back(std::make_shared<MaxPoolLayer>(net->back()->out_c, net->back()->out_h, net->back()->out_w, 9, 1));
-    net->layers.push_back(std::make_shared<RouteLayer>(std::vector<LayerPtr>{net->layers[net->layers.size() - 4]}));
-    net->layers.push_back(std::make_shared<MaxPoolLayer>(net->back()->out_c, net->back()->out_h, net->back()->out_w, 13, 1));
-    net->layers.push_back(std::make_shared<RouteLayer>(std::vector<LayerPtr>{net->layers[net->layers.size() - 1], net->layers[net->layers.size() - 3], net->layers[net->layers.size() - 5], net->layers[net->layers.size() - 6]}));
+    net->add_layer(std::make_shared<MaxPoolLayer>(net->back(), 5, 1));
+    net->add_layer(std::make_shared<RouteLayer>(std::vector<LayerPtr>{net->layer(-2)}));
+    net->add_layer(std::make_shared<MaxPoolLayer>(net->back(), 9, 1));
+    net->add_layer(std::make_shared<RouteLayer>(std::vector<LayerPtr>{net->layer(-4)}));
+    net->add_layer(std::make_shared<MaxPoolLayer>(net->back(), 13, 1));
+    net->add_layer(std::make_shared<RouteLayer>(std::vector<LayerPtr>{net->layer(-1), net->layer(-3), net->layer(-5), net->layer(-6)}));
     // End SPP
     repeatConvolutionalLayers(net.get(), 512, 2);
     makeYoloLayers(net.get(), 500, std::vector<float>{116,90,  156,198,  373,326});
@@ -180,12 +180,12 @@ NetworkPtr YoloNet(const std::string& data_dir)
     net->w  = 608; 
     net->h = 608;
 
-    net->layers.push_back(std::make_shared<ConvolutionalLayer>(3, net->h, net->w, 32, 3));
+    net->add_layer(std::make_shared<ConvolutionalLayer>(3, net->h, net->w, 32, 3));
     // Downsample
-    net->layers.push_back(std::make_shared<ConvolutionalLayer>(net->back()->out_c, net->back()->out_h, net->back()->out_w, 64, 3, 2));
+    net->add_layer(std::make_shared<ConvolutionalLayer>(net->back(), 64, 3, 2));
     makeShortcuts(net.get(), 32);
     // Downsample
-    net->layers.push_back(std::make_shared<ConvolutionalLayer>(net->back()->out_c, net->back()->out_h, net->back()->out_w, 128, 3, 2));
+    net->add_layer(std::make_shared<ConvolutionalLayer>(net->back(), 128, 3, 2));
     makeShortcuts(net.get(), 64);
     makeShortcuts(net.get(), 64);
     // Downsample
@@ -214,24 +214,24 @@ NetworkPtr TinyYoloNet(const std::string& data_dir) {
     net->w  = 416; 
     net->h = 416;
 
-    net->layers.push_back(std::make_shared<ConvolutionalLayer>(3, net->h, net->w, 16, 3));
-    net->layers.push_back(std::make_shared<MaxPoolLayer>(net->back()->out_c, net->back()->out_h, net->back()->out_w, 2, 2));
+    net->add_layer(std::make_shared<ConvolutionalLayer>(3, net->h, net->w, 16, 3));
+    net->add_layer(std::make_shared<MaxPoolLayer>(net->back(), 2, 2));
 
     int filters = 32;
     for (int i = 0; i < 4; i++, filters *= 2) {
-        net->layers.push_back(std::make_shared<ConvolutionalLayer>(net->back()->out_c, net->back()->out_h, net->back()->out_w, filters, 3));
-        net->layers.push_back(std::make_shared<MaxPoolLayer>(net->back()->out_c, net->back()->out_h, net->back()->out_w, 2, 2));
+        net->add_layer(std::make_shared<ConvolutionalLayer>(net->back(), filters, 3));
+        net->add_layer(std::make_shared<MaxPoolLayer>(net->back(), 2, 2));
     }
 
-    net->layers.push_back(std::make_shared<ConvolutionalLayer>(net->back()->out_c, net->back()->out_h, net->back()->out_w, 512, 3));
-    net->layers.push_back(std::make_shared<MaxPoolLayer>(net->back()->out_c, net->back()->out_h, net->back()->out_w, 2, 1));
-    net->layers.push_back(std::make_shared<ConvolutionalLayer>(net->back()->out_c, net->back()->out_h, net->back()->out_w, 1024, 3));
+    net->add_layer(std::make_shared<ConvolutionalLayer>(net->back(), 512, 3));
+    net->add_layer(std::make_shared<MaxPoolLayer>(net->back(), 2, 1));
+    net->add_layer(std::make_shared<ConvolutionalLayer>(net->back(), 1024, 3));
 
     repeatConvolutionalLayers(net.get(), 256, 1);
     makeYoloLayers(net.get(), 80, std::vector<float>{81,82,  135,169,  344,319});
 
     makeUpSamples(net.get(), 128, 8);
-    net->layers.push_back(std::make_shared<ConvolutionalLayer>(net->back()->out_c, net->back()->out_h, net->back()->out_w, 256, 3));
+    net->add_layer(std::make_shared<ConvolutionalLayer>(net->back(), 256, 3));
     makeYoloLayers(net.get(), 80, std::vector<float>{10,14,  23,27,  37,58});
 
     load_alphabets(data_dir);
@@ -249,7 +249,7 @@ NetworkPtr loadYoloNet(const std::string& data_dir, const std::string& filename)
         net = YoloNet(data_dir);
     }
 
-    net->load_weights(filename.c_str());
+    net->load_weights(filename);
     return net;
 }
 
@@ -257,11 +257,16 @@ LayerPtr network::back() {
     return layers.back();
 }
 
-void network::load_weights(const char *filename)
+LayerPtr network::layer(int offset) {
+    if (offset < 0) return layers[layers.size() + offset];
+    else return layers[offset];
+}
+
+void network::load_weights(const std::string& filename)
 {
-    fprintf(stderr, "Loading weights from %s...", filename);
+    fprintf(stderr, "Loading weights from %s...", filename.c_str());
     fflush(stdout);
-    FILE *fp = fopen(filename, "rb");
+    FILE *fp = fopen(filename.c_str(), "rb");
     if(!fp) throw std::runtime_error("Loading weights error");
 
     int major;

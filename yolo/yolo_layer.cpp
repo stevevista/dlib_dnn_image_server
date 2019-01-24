@@ -2,20 +2,21 @@
 
 namespace darknet {
 
-YoloLayer::YoloLayer(int h, int w, int _classes, const std::vector<float>& _biases) 
-: num(_biases.size()/2)
-, classes(_classes)
+YoloLayer::YoloLayer(LayerPtr _linkin, const std::vector<float>& _biases) 
+: linkin(_linkin)
+, num(_biases.size()/2)
 , biases(_biases)
-, output_ptr(nullptr)
 {
-    this->out_w = w;
-    this->out_h = h;
-    this->out_c = num*(classes + 4 + 1);
+    const int k = linkin->get_output().k();
+    const int w = linkin->get_output().nc();
+    const int h = linkin->get_output().nr();
+    // calculate classes
+    classes = k/num - 4 - 1;
 
     xy = alias_tensor(2*w*h);
     probs = alias_tensor((classes+1)*w*h);
 
-    fprintf(stderr, "yolo\n");
+    fprintf(stderr, "yolo(classes: %d)\n", classes);
 }
 
 const tensor& YoloLayer::forward_layer(const tensor& input)
@@ -23,7 +24,7 @@ const tensor& YoloLayer::forward_layer(const tensor& input)
     float *X = const_cast<float*>(input.host());
     tensor& out = const_cast<tensor&>(input);
 
-    const int spatical = out_h * out_w;
+    const int spatical = input.nr() * input.nc();
 
     for(int n = 0; n < num; ++n) {
         auto dest = xy(out, n*(4+classes+1)*spatical);
@@ -31,18 +32,14 @@ const tensor& YoloLayer::forward_layer(const tensor& input)
         dest = probs(out, (n*(4+classes+1) + 4)*spatical);
         tt::sigmoid(dest, dest);
     }
-    output_ptr = &input;
     return input;
 }
 
 void YoloLayer::get_yolo_detections(float thresh, std::vector<detection>& dets)
 {
-    if (!output_ptr) {
-        return;
-    }
-    const float *predictions = output_ptr->host();
-    const int width = out_w;
-    const int height = out_h;
+    const float *predictions = get_output().host();
+    const int width = get_output().nc();
+    const int height = get_output().nr();
     const int spatical = width * height;
 
     for(int n = 0; n < num; ++n) {

@@ -6,19 +6,16 @@ RouteLayer::RouteLayer(std::vector<LayerPtr> inputlayers)
 : input_layers(inputlayers)
 {
     auto first = inputlayers[0];
-    out_w = first->out_w;
-    out_h = first->out_h;
-    out_c = first->out_c;
+    const int out_w = first->get_output().nc();
+    const int out_h = first->get_output().nr();
+    int out_k = first->get_output().k();
     for(auto i = 1; i < inputlayers.size(); ++i) {
         auto next = inputlayers[i];
-        if(next->out_w == first->out_w && next->out_h == first->out_h) {
-            out_c += next->out_c;
-        }else{
-            out_h = out_w = out_c = 0;
-        }
+        DLIB_CASSERT(next->get_output().nr() == out_h && next->get_output().nc() == out_w);
+        out_k += next->get_output().k();
     }
 
-    output.set_size(1, out_c, out_h, out_w);
+    output.set_size(1, out_k, out_h, out_w);
     fprintf(stderr,"route \n");
 }
 
