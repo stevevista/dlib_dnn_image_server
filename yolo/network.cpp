@@ -7,90 +7,90 @@
 namespace darknet {
 
 const std::vector<std::string> coco_names = {
-"person",
-"bicycle",
-"car",
-"motorbike",
-"aeroplane",
-"bus",
-"train",
-"truck",
-"boat",
-"traffic light",
-"fire hydrant",
-"stop sign",
-"parking meter",
-"bench",
-"bird",
-"cat",
-"dog",
-"horse",
-"sheep",
-"cow",
-"elephant",
-"bear",
-"zebra",
-"giraffe",
-"backpack",
-"umbrella",
-"handbag",
-"tie",
-"suitcase",
-"frisbee",
-"skis",
-"snowboard",
-"sports ball",
-"kite",
-"baseball bat",
-"baseball glove",
-"skateboard",
-"surfboard",
-"tennis racket",
-"bottle",
-"wine glass",
-"cup",
-"fork",
-"knife",
-"spoon",
-"bowl",
-"banana",
-"apple",
-"sandwich",
-"orange",
-"broccoli",
-"carrot",
-"hot dog",
-"pizza",
-"donut",
-"cake",
-"chair",
-"sofa",
-"pottedplant",
-"bed",
-"diningtable",
-"toilet",
-"tvmonitor",
-"laptop",
-"mouse",
-"remote",
-"keyboard",
-"cell phone",
-"microwave",
-"oven",
-"toaster",
-"sink",
-"refrigerator",
-"book",
-"clock",
-"vase",
-"scissors",
-"teddy bear",
-"hair drier",
-"toothbrush"
+    "person",
+    "bicycle",
+    "car",
+    "motorbike",
+    "aeroplane",
+    "bus",
+    "train",
+    "truck",
+    "boat",
+    "traffic light",
+    "fire hydrant",
+    "stop sign",
+    "parking meter",
+    "bench",
+    "bird",
+    "cat",
+    "dog",
+    "horse",
+    "sheep",
+    "cow",
+    "elephant",
+    "bear",
+    "zebra",
+    "giraffe",
+    "backpack",
+    "umbrella",
+    "handbag",
+    "tie",
+    "suitcase",
+    "frisbee",
+    "skis",
+    "snowboard",
+    "sports ball",
+    "kite",
+    "baseball bat",
+    "baseball glove",
+    "skateboard",
+    "surfboard",
+    "tennis racket",
+    "bottle",
+    "wine glass",
+    "cup",
+    "fork",
+    "knife",
+    "spoon",
+    "bowl",
+    "banana",
+    "apple",
+    "sandwich",
+    "orange",
+    "broccoli",
+    "carrot",
+    "hot dog",
+    "pizza",
+    "donut",
+    "cake",
+    "chair",
+    "sofa",
+    "pottedplant",
+    "bed",
+    "diningtable",
+    "toilet",
+    "tvmonitor",
+    "laptop",
+    "mouse",
+    "remote",
+    "keyboard",
+    "cell phone",
+    "microwave",
+    "oven",
+    "toaster",
+    "sink",
+    "refrigerator",
+    "book",
+    "clock",
+    "vase",
+    "scissors",
+    "teddy bear",
+    "hair drier",
+    "toothbrush"
 };
 
 void makeYoloLayers(network* net, int classes, const std::vector<float>& biases) {
-    int filters = (biases.size()/2)*(classes + 4 + 1);
+    const int filters = (biases.size()/2)*(classes + 4 + 1);
     net->add_layer(std::make_shared<ConvolutionalLayer>(net->back(), filters, 1, 1, 1, LINEAR, 0));
     net->add_layer(std::make_shared<YoloLayer>(net->back(), biases));
 }
@@ -282,7 +282,7 @@ void network::load_weights(const std::string& filename)
         int iseen = 0;
         fread(&iseen, sizeof(int), 1, fp);
     }
-    for(auto l : layers) {
+    for(auto& l : layers) {
         l->load_weights(fp);
     }
     fprintf(stderr, "Done!\n");
@@ -292,7 +292,7 @@ void network::load_weights(const std::string& filename)
 void network::predict(const tensor& x)
 {
     const tensor* pinput = &x;
-    for(auto l : layers){
+    for(auto& l : layers) {
         pinput = &l->forward_layer(*pinput);
     }
 }
@@ -309,27 +309,25 @@ std::vector<detection> network::predict_boxes(int img_w, int img_h, int new_w, i
     mtx.lock();
     predict(input);
 
-    for(auto l : layers) {
+    for(auto& l : layers) {
         l->get_yolo_detections(thresh, dets);
     }
     mtx.unlock();
 
     for (auto& det : dets) {
         // correct box
-        det.bbox.x = (det.bbox.x - 0.5)*netw/new_w + 0.5;
-        det.bbox.y = (det.bbox.y - 0.5)*neth/new_h + 0.5;
-        det.bbox.w /= new_w;
-        det.bbox.h /= new_h;
+        det.bbox.x = (det.bbox.x - 0.5)*netw + 0.5*new_w;
+        det.bbox.y = (det.bbox.y - 0.5)*neth + 0.5*new_h;
     }
 
     do_nms(dets, nms);
 
     for (auto& det : dets) {
         box b = det.bbox;
-        int left  = (b.x-b.w/2.)*img_w;
-        int right = (b.x+b.w/2.)*img_w;
-        int top   = (b.y-b.h/2.)*img_h;
-        int bot   = (b.y+b.h/2.)*img_h;
+        int left  = (b.x-b.w/2.)*img_w/new_w;
+        int right = (b.x+b.w/2.)*img_w/new_w;
+        int top   = (b.y-b.h/2.)*img_h/new_h;
+        int bot   = (b.y+b.h/2.)*img_h/new_h;
 
         if(left < 0) left = 0;
         if(right > img_w-1) right = img_w-1;

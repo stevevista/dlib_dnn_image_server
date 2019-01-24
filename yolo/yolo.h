@@ -22,11 +22,10 @@ struct box {
 };
 
 struct detection {
-    box bbox;
     rectangle rect;
+    box bbox;
     std::vector<float> prob;
     std::vector<int> candicates;
-    float objectness;
 };
 
 class layer {
@@ -35,7 +34,7 @@ public:
     virtual void load_weights(FILE *fp) {}
     virtual const tensor& forward_layer(const tensor& net) = 0;
     virtual const tensor& get_output() const = 0;
-    virtual void get_yolo_detections(float thresh, std::vector<detection>& dets) { }
+    virtual void get_yolo_detections(float thresh, std::vector<detection>& dets) const { }
 };
 
 class network {

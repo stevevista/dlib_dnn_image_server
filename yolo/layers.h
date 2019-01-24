@@ -77,7 +77,7 @@ public:
   YoloLayer(LayerPtr linkin, const std::vector<float>& biases);
   const tensor& forward_layer(const tensor& net);
   const tensor& get_output() const { return linkin->get_output(); }
-  void get_yolo_detections(float thresh, std::vector<detection>& dets);
+  void get_yolo_detections(float thresh, std::vector<detection>& dets) const;
 };
 
 }

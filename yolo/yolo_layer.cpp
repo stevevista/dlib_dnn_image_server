@@ -35,7 +35,7 @@ const tensor& YoloLayer::forward_layer(const tensor& input)
     return input;
 }
 
-void YoloLayer::get_yolo_detections(float thresh, std::vector<detection>& dets)
+void YoloLayer::get_yolo_detections(float thresh, std::vector<detection>& dets) const
 {
     const float *predictions = get_output().host();
     const int width = get_output().nc();
@@ -58,7 +58,6 @@ void YoloLayer::get_yolo_detections(float thresh, std::vector<detection>& dets)
 
             detection det;
             det.bbox = b;
-            det.objectness = objectness;
             det.prob.resize(classes, 0);
             for(int j = 0; j < classes; ++j) {
                 float prob = objectness*predictions[(4 + 1 + j)*spatical + i];
