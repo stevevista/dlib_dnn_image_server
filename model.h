@@ -20,6 +20,7 @@ class model {
     const long pyramid_upsize;
     const int yolo_type;
     std::mutex mtx;
+    std::mutex mtx2;
 public:
     model(const string& basedir, int landmarks, bool use_mmod, long upsize, int yolo_type);
 

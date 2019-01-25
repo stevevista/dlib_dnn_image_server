@@ -108,26 +108,34 @@ std::vector<rectangle> model::detect_faces(matrix<rgb_pixel>& img) {
     if (use_mmod) {
       while(img.size() < pyramid_upsize*pyramid_upsize)
         pyramid_up(img);
+      mtx2.lock();
       auto mmdets = mmod_net(img);
+      mtx2.unlock();
       for (auto& mm : mmdets) {
         dets.push_back(mm.rect);
       }
     } else {
+        mtx2.lock();
         dets = detector(img);
+        mtx2.unlock();
 
       if (dets.size() == 0) {
                 matrix<rgb_pixel> dimg;
-                rotate_image(img, dimg, -pi/2);
-                dets = detector(dimg);
-                if (dets.size()) {
-                    img = dimg;
-                }
+            rotate_image(img, dimg, -pi/2);
+            mtx2.lock();
+            dets = detector(dimg);
+            mtx2.unlock();
+            if (dets.size()) {
+                img = dimg;
+            }
       }
 
       if (dets.size() == 0) {
         matrix<rgb_pixel> dimg;
         rotate_image(img, dimg, pi/2);
+        mtx2.lock();
         dets = detector(dimg);
+        mtx2.unlock();
         if (dets.size()) {
           img = dimg;
         }
@@ -159,8 +167,10 @@ std::vector<face_dectection> model::predict_faces(matrix<rgb_pixel>& img, int ma
 
   std::vector<matrix<rgb_pixel>> faces;
   std::vector<full_object_detection> shapes;
-  for (auto face : dets) {
+  for (auto& face : dets) {
+    mtx2.lock();
     auto shape = sp(img, face);
+    mtx2.unlock();
     matrix<rgb_pixel> face_chip;
     extract_image_chip(img, get_face_chip_details(shape,150,0.25), face_chip);
     faces.push_back(move(face_chip));
